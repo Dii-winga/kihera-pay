@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Pay invoice</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --dark:#012527; --lime:#64C01E; --lime-deep:#3D7A16; --lime-tint:#EEF8E4;
+    --ink:#0E1A1A; --muted:#66716F; --faint:#B2BAB8; --hair:#E4E7E6;
+    --warn:#B5820A; --warn-tint:#FDF3D6; --danger:#C4342F; --danger-tint:#FBE9E8;
+    --bg:#F4F6F5;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Poppins',system-ui,sans-serif;background:var(--bg);color:var(--ink);
+    -webkit-font-smoothing:antialiased;line-height:1.5;padding:0 16px 48px}
+  .wrap{max-width:460px;margin:0 auto}
+
+  header{text-align:center;padding:36px 0 18px}
+  .farmname{font-size:20px;font-weight:700;color:var(--dark);line-height:1.3;
+    overflow-wrap:anywhere}
+  .kicker{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;
+    color:var(--lime-deep);font-weight:600;margin-top:12px}
+
+  .card{background:#fff;border:1px solid var(--hair);border-radius:14px;
+    padding:20px 18px;margin-top:14px;box-shadow:0 2px 10px rgba(1,37,39,.05)}
+
+  .amount{text-align:center}
+  .amount .lbl{font-size:11px;letter-spacing:.8px;text-transform:uppercase;
+    color:var(--muted);font-weight:600}
+  /* Scales with the viewport so a six-figure balance still fits a 320px phone
+     at increased text scale. NOT overflow-wrap:anywhere here, deliberately: at
+     246px effective width that broke "128,050.75" across two lines mid-number,
+     which is a worse thing to show somebody than a smaller font. It wraps
+     between the currency and the figure instead. */
+  .amount .big{font-size:clamp(24px,8.5vw,34px);font-weight:700;color:var(--dark);
+    margin-top:6px;font-variant-numeric:tabular-nums;line-height:1.15}
+  .meta{display:flex;justify-content:space-between;gap:12px;margin-top:16px;
+    padding-top:14px;border-top:1px solid var(--hair);font-size:13px;flex-wrap:wrap}
+  .meta .k{color:var(--muted)}
+  .meta .v{color:var(--ink);font-weight:600;overflow-wrap:anywhere}
+
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  input[type=email]{width:100%;font:inherit;font-size:16px;padding:12px 14px;
+    border:1px solid var(--hair);border-radius:10px;background:#fff;color:var(--ink)}
+  input[type=email]:focus{outline:2px solid var(--lime-deep);outline-offset:1px}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.55}
+
+  button{width:100%;font:inherit;font-weight:600;font-size:16px;min-height:52px;
+    margin-top:16px;border:0;border-radius:12px;background:var(--dark);color:#fff;
+    cursor:pointer;padding:12px 16px;line-height:1.3;overflow-wrap:anywhere}
+  button:disabled{opacity:.55;cursor:default}
+  button:focus-visible{outline:3px solid var(--lime-deep);outline-offset:2px}
+
+  .note{font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.6;
+    text-align:center}
+  .err{background:var(--danger-tint);color:var(--danger);border-radius:10px;
+    padding:12px 14px;font-size:13px;margin-top:14px;line-height:1.55}
+
+  .state{text-align:center;padding:56px 16px;color:var(--muted)}
+  .state h1{font-size:18px;color:var(--ink);margin-bottom:10px}
+  .state p{font-size:14px;line-height:1.6}
+  .chip{display:inline-block;font-size:12px;font-weight:600;padding:6px 14px;
+    border-radius:999px;margin-bottom:14px}
+  .chip.ok{background:var(--lime-tint);color:var(--lime-deep)}
+  .chip.warn{background:var(--warn-tint);color:var(--warn)}
+  .spinner{width:26px;height:26px;border:3px solid var(--hair);border-top-color:var(--lime);
+    border-radius:50%;margin:0 auto 16px;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){.spinner{animation:none}}
+
+  footer{text-align:center;font-size:11px;color:var(--faint);margin-top:24px;
+    line-height:1.8}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="loading" class="state" role="status" aria-live="polite">
+    <div class="spinner"></div>
+    Looking up this invoice
+  </div>
+
+  <div id="unavailable" class="state hidden">
+    <h1>This link is not available</h1>
+    <p>It may have expired, or the address may be mistyped. Contact the farm
+       that sent your invoice and they can send you a new link.</p>
+  </div>
+
+  <div id="paid" class="state hidden">
+    <span class="chip ok">Paid</span>
+    <h1>Nothing left to pay</h1>
+    <p id="paid-ref"></p>
+  </div>
+
+  <div id="cancelled" class="state hidden">
+    <span class="chip warn">Cancelled</span>
+    <h1>This invoice was cancelled</h1>
+    <p id="cancelled-ref">Contact the farm if you think that is wrong.</p>
+  </div>
+
+  <div id="redirecting" class="state hidden" role="status" aria-live="polite">
+    <div class="spinner"></div>
+    Taking you to the payment page
+  </div>
+
+  <div id="payable" class="hidden">
+    <header>
+      <div class="farmname" id="farm-name"></div>
+      <div class="kicker">Pay invoice</div>
+    </header>
+
+    <div class="card amount">
+      <div class="lbl">Amount due</div>
+      <div class="big" id="amount"></div>
+      <div class="meta">
+        <span><span class="k">Invoice</span> <span class="v" id="invoice-no"></span></span>
+        <span id="due-wrap" class="hidden"><span class="k">Due</span>
+          <span class="v" id="due-on"></span></span>
+      </div>
+    </div>
+
+    <div class="card" id="email-card" hidden>
+      <label for="email">Your email address</label>
+      <input id="email" type="email" inputmode="email" autocomplete="email"
+             placeholder="you@example.com" aria-describedby="email-hint">
+      <p class="hint" id="email-hint">Our payment provider needs an email
+        address to take the payment and send you a confirmation. It is used for
+        this payment only.</p>
+    </div>
+
+    <div id="error" class="err hidden" role="alert"></div>
+
+    <button id="pay" type="button"></button>
+
+    <p class="note">You will be taken to Paystack to pay by mobile money or
+      card. Kihera never sees your card or mobile money details.</p>
+  </div>
+
+  <footer id="footer" class="hidden">
+    <div id="footer-farm"></div>
+  </footer>
+</div>
+
+<script>
+  // The anon/publishable key is public by design - it ships in the mobile app
+  // and on the traceability page. Every byte this page can see is decided by
+  // public.payment_link_summary(), which returns the farm name, the invoice
+  // number, the currency, the amount currently due, the due date, the state,
+  // and whether an email is needed. Nothing identifies the customer.
+  const SUPABASE_URL = 'https://eexgyyzsycdscfjkqaxu.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_G-d7lJcxF1W3r5-43ObfdQ_fR5EwU8R';
+  const PAY_INIT = SUPABASE_URL + '/functions/v1/pay-init';
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
+                  'Jul','Aug','Sep','Oct','Nov','Dec'];
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  const fmtDate = s => {
+    if (!s) return '';
+    const d = new Date(s + 'T00:00:00');
+    if (isNaN(d)) return s;
+    return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+  };
+
+  // MINOR UNITS IN, TEXT OUT, and the number of decimals comes from the payload.
+  // Never a hardcoded two: JPY has none and TND has three, and a wrong digit
+  // count is off by a factor of ten in somebody's money.
+  function money(p) {
+    const digits = Number(p.minor_digits ?? 2);
+    const minor = Number(p.amount_minor ?? 0);
+    const major = minor / Math.pow(10, digits);
+    const n = major.toLocaleString(undefined, {
+      minimumFractionDigits: digits, maximumFractionDigits: digits });
+    const mark = p.display_form === 'code'
+      ? String(p.currency ?? '') + ' '
+      : String(p.currency_symbol ?? '');
+    return p.symbol_position === 'after' ? n + ' ' + mark.trim() : mark + n;
+  }
+
+  // token = last path segment (/i/{token}) or ?i= fallback for local work
+  function readToken() {
+    const q = new URLSearchParams(location.search).get('i');
+    if (q) return q.trim();
+    const parts = location.pathname.split('/').filter(Boolean);
+    const i = parts.indexOf('i');
+    if (i >= 0 && parts[i + 1]) return parts[i + 1];
+    return parts.length ? parts[parts.length - 1] : '';
+  }
+
+  const PANELS = ['loading','unavailable','paid','cancelled','redirecting','payable'];
+  function show(id) {
+    for (const s of PANELS)
+      document.getElementById(s).classList.toggle('hidden', s !== id);
+    document.getElementById('footer').classList.toggle('hidden', id !== 'payable');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  function clearError() {
+    document.getElementById('error').classList.add('hidden');
+  }
+
+  const TOKEN = readToken();
+  let summary = null;
+
+  async function load() {
+    show('loading');
+    let res;
+    try {
+      res = await fetch(SUPABASE_URL + '/rest/v1/rpc/payment_link_summary', {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ p_token: TOKEN })
+      });
+    } catch (_) {
+      show('unavailable');
+      return;
+    }
+    if (!res.ok) { show('unavailable'); return; }
+    const p = await res.json().catch(() => null);
+    render(p);
+  }
+
+  function render(p) {
+    summary = p;
+    const state = p && p.state;
+
+    if (state === 'paid') {
+      document.getElementById('paid-ref').textContent = p.invoice_no
+        ? 'Invoice ' + p.invoice_no + ' is settled. Thank you.'
+        : 'This invoice is settled. Thank you.';
+      show('paid');
+      return;
+    }
+    if (state === 'cancelled') {
+      document.getElementById('cancelled-ref').textContent = p.invoice_no
+        ? 'Invoice ' + p.invoice_no + ' was cancelled. Contact the farm if you '
+          + 'think that is wrong.'
+        : 'Contact the farm if you think that is wrong.';
+      show('cancelled');
+      return;
+    }
+    if (state !== 'payable') { show('unavailable'); return; }
+
+    document.getElementById('farm-name').textContent = p.farm_name || '';
+    document.getElementById('footer-farm').textContent = p.farm_name || '';
+    document.getElementById('invoice-no').textContent = p.invoice_no || '-';
+    const amount = money(p);
+    document.getElementById('amount').textContent = amount;
+    document.getElementById('pay').textContent = 'Pay ' + amount;
+
+    const dueWrap = document.getElementById('due-wrap');
+    if (p.due_on) {
+      document.getElementById('due-on').textContent = fmtDate(p.due_on);
+      dueWrap.classList.remove('hidden');
+    } else {
+      dueWrap.classList.add('hidden');
+    }
+
+    document.getElementById('email-card').hidden = !p.email_required;
+    show('payable');
+  }
+
+  // Paystack hosted checkout, and nowhere else. The page follows whatever the
+  // trusted function returns, so this is the last place a wrong host can be
+  // stopped.
+  function isPaystackUrl(u) {
+    try {
+      const url = new URL(u);
+      return url.protocol === 'https:' &&
+        (url.hostname === 'checkout.paystack.com' ||
+         url.hostname.endsWith('.paystack.com'));
+    } catch (_) { return false; }
+  }
+
+  const MESSAGES = {
+    email_required: 'Type your email address, then tap Pay again.',
+    email_invalid: 'That does not look like an email address.',
+    provider_unavailable: 'The payment service is not answering right now. '
+      + 'Try again in a few minutes.',
+    paid: 'This invoice has already been paid.',
+    cancelled: 'This invoice was cancelled.'
+  };
+
+  async function pay() {
+    clearError();
+    const btn = document.getElementById('pay');
+    const emailEl = document.getElementById('email');
+    const email = emailEl ? emailEl.value.trim() : '';
+
+    if (summary && summary.email_required && email === '') {
+      showError(MESSAGES.email_required);
+      if (emailEl) emailEl.focus();
+      return;
+    }
+
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = 'Starting';
+
+    let res, body;
+    try {
+      // THE AMOUNT IS NOT SENT. The server derives it from the invoice as it
+      // stands right now; anything this page claimed would be ignored.
+      res = await fetch(PAY_INIT, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(email === ''
+          ? { token: TOKEN }
+          : { token: TOKEN, email: email })
+      });
+      body = await res.json().catch(() => null);
+    } catch (_) {
+      btn.disabled = false;
+      btn.textContent = label;
+      showError('Could not reach the payment service. Check your connection '
+        + 'and try again.');
+      return;
+    }
+
+    if (res.ok && body && isPaystackUrl(body.authorization_url)) {
+      show('redirecting');
+      location.href = body.authorization_url;
+      return;
+    }
+
+    btn.disabled = false;
+    btn.textContent = label;
+    const reason = body && body.error;
+    if (reason === 'paid' || reason === 'cancelled') {
+      // The invoice moved under the payer. Re-read rather than argue.
+      load();
+      return;
+    }
+    showError(MESSAGES[reason] || 'This invoice cannot be paid online right '
+      + 'now. Contact the farm that sent it.');
+  }
+
+  document.getElementById('pay').addEventListener('click', pay);
+
+  // THE RETURN FROM PAYSTACK IS INFORMATIONAL. It is deliberately not read:
+  // whatever the query string says, the state comes from the server on the
+  // reload below. A page that trusted ?status=success would mark invoices paid
+  // for anybody who typed it.
+  load();
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# The kihera-pay Netlify site (pay.kihera-farms.com) publishes THIS directory as
+# its root. Serve the page for any /i/{token} link an invoice carries. Netlify
+# serves real files before applying redirects, so only tokens fall through.
+/i/*   /index.html   200
