@@ -44,6 +44,21 @@
   #paid .meta{max-width:320px;margin-left:auto;margin-right:auto}
   #paid #paid-ref{margin-top:14px}
   #unconfirmed button{margin-top:18px;width:auto;padding:12px 22px}
+  .receipt{background:var(--lime-tint);border-color:var(--lime-deep)}
+  .receipt .rline{display:flex;justify-content:space-between;gap:12px;
+                  margin-top:10px;font-size:15px}
+  .receipt .rline .k{color:var(--muted)}
+  .receipt .rline .v{color:var(--ink);font-weight:600}
+  #part-card{margin-top:-4px;text-align:center}
+  #part-card #part-fields{background:var(--surface);border:1px solid var(--hair);
+                          border-radius:14px;padding:16px;margin-top:10px;
+                          text-align:left}
+  .linkish{background:none;border:0;padding:0;color:var(--lime-deep);
+           font:inherit;font-size:14px;font-weight:600;text-decoration:underline;
+           cursor:pointer;width:auto;min-height:44px}
+  .amountrow{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .amountrow .cur{color:var(--muted);font-size:15px;font-weight:600;flex:none}
+  .amountrow input{margin:0}
   .meta{display:flex;justify-content:space-between;gap:12px;margin-top:16px;
     padding-top:14px;border-top:1px solid var(--hair);font-size:13px;flex-wrap:wrap}
   .meta .k{color:var(--muted)}
@@ -156,6 +171,19 @@
       <div class="kicker">Pay invoice</div>
     </header>
 
+    <!-- WHAT LANDED SINCE LAST TIME. Shown only when this page load followed a
+         payment that did not clear the invoice: the state is still `payable`,
+         so without this the payer would come back from Paystack to a screen
+         that looks exactly like the one they left, only with a smaller number,
+         and have no way to tell their money arrived. -->
+    <div id="part-receipt" class="card receipt hidden">
+      <span class="chip ok">Payment received</span>
+      <div class="rline"><span class="k">Paid just now</span>
+        <span class="v" id="part-paid"></span></div>
+      <div class="rline"><span class="k">Still to pay</span>
+        <span class="v" id="part-left"></span></div>
+    </div>
+
     <div class="card amount">
       <div class="lbl">Amount due</div>
       <div class="big" id="amount"></div>
@@ -163,6 +191,23 @@
         <span><span class="k">Invoice</span> <span class="v" id="invoice-no"></span></span>
         <span id="due-wrap" class="hidden"><span class="k">Due</span>
           <span class="v" id="due-on"></span></span>
+      </div>
+    </div>
+
+    <!-- PART PAYMENT. Full is the default and stays one tap; paying less is a
+         deliberate second action, because most people pay what they owe and a
+         prefilled editable box invites a typo into a payment. -->
+    <div id="part-card">
+      <button id="part-toggle" type="button" class="linkish">Pay part of this instead</button>
+      <div id="part-fields" class="hidden">
+        <label for="part-amount">How much are you paying now?</label>
+        <div class="amountrow">
+          <span class="cur" id="part-cur"></span>
+          <input id="part-amount" type="text" inputmode="decimal"
+                 autocomplete="off" aria-describedby="part-hint">
+        </div>
+        <p class="hint" id="part-hint"></p>
+        <button id="part-cancel" type="button" class="linkish">Pay the full amount instead</button>
       </div>
     </div>
 
@@ -319,7 +364,79 @@
     }
 
     document.getElementById('email-card').hidden = !p.email_required;
+
+    // The part-payment control resets to closed on every render: an amount
+    // typed against an older balance must never survive into a new one.
+    document.getElementById('part-cur').textContent =
+      (p.display_form === 'code' ? p.currency : p.currency_symbol) || '';
+    document.getElementById('part-hint').textContent =
+      'Anything up to ' + money(p) + '. The rest stays on the invoice and this '
+      + 'same link keeps working for it.';
+    partAmount(null);
+
+    renderPartReceipt(p);
     show('payable');
+  }
+
+  /// Amount in MINOR units the payer wants to pay, or null for the whole
+  /// balance. The page proposes; `begin_provider_payment` disposes.
+  let partWanted = null;
+
+  function partAmount(minor) {
+    partWanted = minor;
+    const open = minor !== null;
+    document.getElementById('part-fields').classList.toggle('hidden', !open);
+    document.getElementById('part-toggle').classList.toggle('hidden', open);
+    const btn = document.getElementById('pay');
+    if (summary) {
+      // A bare "Pay" until there is a real figure. "Pay GHS 0.00" on an empty
+      // box reads as a button that will charge nothing, which is alarming and
+      // is not what it does.
+      btn.textContent = !open
+        ? 'Pay ' + money(summary)
+        : (minor > 0 ? 'Pay ' + fmtMinor(minor, summary) : 'Pay');
+    }
+  }
+
+  /// One place that turns minor units into the farm's own money format, so the
+  /// button, the hint and the receipt cannot disagree. Never a hardcoded 100:
+  /// `minor_digits` is 0 for JPY and 3 for TND.
+  function fmtMinor(minor, p) {
+    return money({ ...p, amount_minor: minor });
+  }
+
+  /// Was this page load preceded by a payment that did not clear the invoice?
+  ///
+  /// The balance BEFORE checkout is kept in sessionStorage under the token, so
+  /// nothing new has to be disclosed by the server to answer this. It is a
+  /// display convenience and nothing depends on it: with storage unavailable
+  /// the page simply shows the current balance without the banner, which is
+  /// still correct, just quieter.
+  function renderPartReceipt(p) {
+    const card = document.getElementById('part-receipt');
+    card.classList.add('hidden');
+    const before = readBefore();
+    if (before === null || p.amount_minor == null) return;
+    const paid = before - p.amount_minor;
+    if (paid <= 0) return;
+    document.getElementById('part-paid').textContent = fmtMinor(paid, p);
+    document.getElementById('part-left').textContent = fmtMinor(p.amount_minor, p);
+    card.classList.remove('hidden');
+    clearBefore();
+  }
+
+  const BEFORE_KEY = 'kihera-pay-before-' + TOKEN;
+  function rememberBefore(minor) {
+    try { sessionStorage.setItem(BEFORE_KEY, String(minor)); } catch (_) {}
+  }
+  function readBefore() {
+    try {
+      const v = sessionStorage.getItem(BEFORE_KEY);
+      return v === null ? null : Number(v);
+    } catch (_) { return null; }
+  }
+  function clearBefore() {
+    try { sessionStorage.removeItem(BEFORE_KEY); } catch (_) {}
   }
 
   // Paystack hosted checkout, and nowhere else. The page follows whatever the
@@ -340,7 +457,9 @@
     provider_unavailable: 'The payment service is not answering right now. '
       + 'Try again in a few minutes.',
     paid: 'This invoice has already been paid.',
-    cancelled: 'This invoice was cancelled.'
+    cancelled: 'This invoice was cancelled.',
+    amount_invalid: 'Enter an amount between the smallest unit and the full '
+      + 'amount due.'
   };
 
   async function pay() {
@@ -355,6 +474,24 @@
       return;
     }
 
+    // Caught here so the payer gets a sentence instead of a round trip. The
+    // server checks the same two bounds against the LIVE balance, which is the
+    // one that can have moved since this page was drawn.
+    if (partWanted !== null) {
+      if (partWanted <= 0) {
+        showError('Enter how much you are paying now.');
+        document.getElementById('part-amount').focus();
+        return;
+      }
+      if (summary && summary.amount_minor != null
+          && partWanted > summary.amount_minor) {
+        showError('That is more than the ' + money(summary) + ' due. Pay the '
+          + 'full amount, or less.');
+        document.getElementById('part-amount').focus();
+        return;
+      }
+    }
+
     btn.disabled = true;
     const label = btn.textContent;
     btn.textContent = 'Starting';
@@ -363,6 +500,21 @@
     try {
       // THE AMOUNT IS NOT SENT. The server derives it from the invoice as it
       // stands right now; anything this page claimed would be ignored.
+      // THE AMOUNT IS A REQUEST. `begin_provider_payment` validates it against
+      // the balance it reads under a row lock and refuses anything above it;
+      // this figure is never what decides the charge. Omitted entirely for a
+      // full payment, so the ordinary path is byte-for-byte what it was.
+      const payload = { token: TOKEN };
+      if (email !== '') payload.email = email;
+      if (partWanted !== null) payload.amount_minor = partWanted;
+
+      // What is owed right now, kept for the return from Paystack so the page
+      // can tell a part payment landed. Written before leaving, because after
+      // the redirect this page is a fresh load with no memory.
+      if (summary && summary.amount_minor != null) {
+        rememberBefore(summary.amount_minor);
+      }
+
       res = await fetch(PAY_INIT, {
         method: 'POST',
         headers: {
@@ -370,9 +522,7 @@
           'Authorization': 'Bearer ' + SUPABASE_KEY,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(email === ''
-          ? { token: TOKEN }
-          : { token: TOKEN, email: email })
+        body: JSON.stringify(payload)
       });
       body = await res.json().catch(() => null);
     } catch (_) {
@@ -402,6 +552,40 @@
   }
 
   document.getElementById('pay').addEventListener('click', pay);
+
+  document.getElementById('part-toggle').addEventListener('click', function () {
+    // Opens PREFILLED WITH NOTHING, not with the full amount. A box already
+    // holding the right number is a box people edit by accident.
+    document.getElementById('part-amount').value = '';
+    partAmount(0);
+    document.getElementById('part-amount').focus();
+  });
+
+  document.getElementById('part-cancel').addEventListener('click', function () {
+    clearError();
+    partAmount(null);
+  });
+
+  document.getElementById('part-amount').addEventListener('input', function () {
+    clearError();
+    partAmount(readTypedMinor());
+  });
+
+  /// What was typed, in minor units, or 0 when it is not yet a usable number.
+  ///
+  /// Client-side only, and only so the button and the message can be helpful.
+  /// The server refuses the same cases with `amount_invalid`, and its answer is
+  /// the one that counts.
+  function readTypedMinor() {
+    if (!summary) return 0;
+    const raw = document.getElementById('part-amount').value.trim()
+      .replace(/,/g, '');
+    if (raw === '' || !/^\d*\.?\d*$/.test(raw)) return 0;
+    const digits = Number(summary.minor_digits ?? 2);
+    const minor = Math.round(Number(raw) * Math.pow(10, digits));
+    if (!Number.isFinite(minor) || minor <= 0) return 0;
+    return minor;
+  }
 
   // THE RETURN FROM PAYSTACK IS INFORMATIONAL, AND THAT IS NOT THE SAME AS
   // IGNORING IT.
@@ -453,8 +637,18 @@
       // polling deliberately does not call it while the state has not moved.
       if (p) summary = p;
       // A settled invoice, or one that moved to a state polling cannot change,
-      // is an answer. Only "still payable" is worth waiting on.
+      // is an answer.
       if (p && p.state && p.state !== 'payable') { render(p); return; }
+      // A PART PAYMENT LEAVES THE STATE `payable`, so waiting for it to change
+      // would wait out the whole window and then say "not confirmed" about
+      // money that had already arrived. The balance falling is the answer in
+      // that case, and render() shows what landed and what is left.
+      const before = readBefore();
+      if (p && p.state === 'payable' && before !== null
+          && p.amount_minor != null && p.amount_minor < before) {
+        render(p);
+        return;
+      }
       await new Promise(function (r) { setTimeout(r, CONFIRM_EVERY_MS); });
     }
     // The window closed with the invoice still open. Say so plainly, name the
