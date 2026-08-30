@@ -37,6 +37,13 @@
      between the currency and the figure instead. */
   .amount .big{font-size:clamp(24px,8.5vw,34px);font-weight:700;color:var(--dark);
     margin-top:6px;font-variant-numeric:tabular-nums;line-height:1.15}
+  #paid .farmname{font-size:15px;font-weight:600;color:var(--muted);margin-top:14px}
+  #paid .big{font-size:clamp(26px,9vw,36px);font-weight:700;color:var(--dark);
+             letter-spacing:-0.5px;line-height:1.15;margin:6px 0 2px}
+  #paid h1{font-size:15px;font-weight:600;color:var(--muted);margin-bottom:0}
+  #paid .meta{max-width:320px;margin-left:auto;margin-right:auto}
+  #paid #paid-ref{margin-top:14px}
+  #unconfirmed button{margin-top:18px;width:auto;padding:12px 22px}
   .meta{display:flex;justify-content:space-between;gap:12px;margin-top:16px;
     padding-top:14px;border-top:1px solid var(--hair);font-size:13px;flex-wrap:wrap}
   .meta .k{color:var(--muted)}
@@ -90,10 +97,46 @@
        that sent your invoice and they can send you a new link.</p>
   </div>
 
+  <!-- The receipt. A customer who has just paid wants one thing on the screen:
+       proof, screenshottable. Before 0229 this panel was a chip and two lines
+       with no farm name, no amount and no date, and a client reported it as an
+       empty page. They were right. -->
   <div id="paid" class="state hidden">
     <span class="chip ok">Paid</span>
+    <div class="farmname" id="paid-farm"></div>
+    <div class="big" id="paid-amount"></div>
     <h1>Nothing left to pay</h1>
+    <div class="meta">
+      <span><span class="k">Invoice</span> <span class="v" id="paid-invoice"></span></span>
+      <span id="paid-when-wrap" class="hidden"><span class="k">Paid</span>
+        <span class="v" id="paid-when"></span></span>
+    </div>
     <p id="paid-ref"></p>
+  </div>
+
+  <!-- WAITING FOR THE WEBHOOK, NOT TRUSTING THE REDIRECT.
+       The browser comes back from Paystack over one connection and the webhook
+       arrives over another; the browser usually wins. Reading state once on
+       load therefore showed a live Pay button to somebody who had just paid,
+       which invites paying twice. This panel is what they see instead while the
+       page asks the server again. The state still only ever comes from the
+       server - the query string is a hint that a payment is in flight, never
+       evidence that it succeeded. -->
+  <div id="confirming" class="state hidden" role="status" aria-live="polite">
+    <div class="spinner"></div>
+    <h1>Confirming your payment</h1>
+    <p>This takes a few seconds. Do not pay again or close this page.</p>
+  </div>
+
+  <!-- The window closed without confirmation. Never an error, and never a Pay
+       button: money may well have left their account. -->
+  <div id="unconfirmed" class="state hidden">
+    <span class="chip warn">Not confirmed yet</span>
+    <h1>We have not had confirmation</h1>
+    <p id="unconfirmed-ref"></p>
+    <p>If money left your account it will be applied to this invoice. Do not
+       pay again. Contact the farm that sent this invoice if you are unsure.</p>
+    <button id="recheck" type="button">Check again</button>
   </div>
 
   <div id="cancelled" class="state hidden">
@@ -192,7 +235,8 @@
     return parts.length ? parts[parts.length - 1] : '';
   }
 
-  const PANELS = ['loading','unavailable','paid','cancelled','redirecting','payable'];
+  const PANELS = ['loading','unavailable','paid','cancelled','redirecting',
+                'payable','confirming','unconfirmed'];
   function show(id) {
     for (const s of PANELS)
       document.getElementById(s).classList.toggle('hidden', s !== id);
@@ -212,25 +256,13 @@
   const TOKEN = readToken();
   let summary = null;
 
+  // ONE copy of the request, used by the first load and by every poll. Two
+  // copies is how a header ends up on one and not the other, which is exactly
+  // the class of bug that kept the first deployment at the CORS preflight.
   async function load() {
     show('loading');
-    let res;
-    try {
-      res = await fetch(SUPABASE_URL + '/rest/v1/rpc/payment_link_summary', {
-        method: 'POST',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ p_token: TOKEN })
-      });
-    } catch (_) {
-      show('unavailable');
-      return;
-    }
-    if (!res.ok) { show('unavailable'); return; }
-    const p = await res.json().catch(() => null);
+    const p = await readState();
+    if (p === null) { show('unavailable'); return; }
     render(p);
   }
 
@@ -239,9 +271,25 @@
     const state = p && p.state;
 
     if (state === 'paid') {
-      document.getElementById('paid-ref').textContent = p.invoice_no
-        ? 'Invoice ' + p.invoice_no + ' is settled. Thank you.'
-        : 'This invoice is settled. Thank you.';
+      // Everything 0229 added, each field optional: an older server that has
+      // not been migrated still renders the old, thinner page rather than
+      // blank boxes.
+      document.getElementById('paid-farm').textContent = p.farm_name || '';
+      document.getElementById('paid-invoice').textContent = p.invoice_no || '-';
+      document.getElementById('paid-amount').textContent =
+        p.amount_minor == null ? '' : money(p);
+
+      const whenWrap = document.getElementById('paid-when-wrap');
+      if (p.paid_on) {
+        document.getElementById('paid-when').textContent = fmtDate(p.paid_on);
+        whenWrap.classList.remove('hidden');
+      } else {
+        whenWrap.classList.add('hidden');
+      }
+
+      // The invoice number is already in the row above; repeating it here read
+      // as filler on a page whose job is to be screenshotted.
+      document.getElementById('paid-ref').textContent = 'Thank you.';
       show('paid');
       return;
     }
@@ -355,11 +403,76 @@
 
   document.getElementById('pay').addEventListener('click', pay);
 
-  // THE RETURN FROM PAYSTACK IS INFORMATIONAL. It is deliberately not read:
-  // whatever the query string says, the state comes from the server on the
-  // reload below. A page that trusted ?status=success would mark invoices paid
-  // for anybody who typed it.
-  load();
+  // THE RETURN FROM PAYSTACK IS INFORMATIONAL, AND THAT IS NOT THE SAME AS
+  // IGNORING IT.
+  //
+  // The query string is still never evidence: nothing below reads `status`,
+  // and no branch marks anything paid because a parameter said so. The state
+  // comes from the server, every time, exactly as before.
+  //
+  // What the query string IS good for is knowing that a payment is probably in
+  // flight. Paystack appends its own `reference`/`trxref` to the callback URL,
+  // and the browser redirect races the webhook over a different connection -
+  // the browser usually wins. Reading state once, on load, therefore showed a
+  // live Pay button to somebody who had just paid. Anyone would take that to
+  // mean it had not worked, and pay again.
+  //
+  // So: a reference in the URL means poll for a short while before believing
+  // "payable". No reference means load once, as before.
+  function returningFromCheckout() {
+    const q = new URLSearchParams(location.search);
+    return !!(q.get('reference') || q.get('trxref'));
+  }
+
+  const CONFIRM_TRIES = 12;      // 12 x 2.5s = 30 seconds
+  const CONFIRM_EVERY_MS = 2500;
+
+  async function readState() {
+    let res;
+    try {
+      res = await fetch(SUPABASE_URL + '/rest/v1/rpc/payment_link_summary', {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ p_token: TOKEN })
+      });
+    } catch (_) { return null; }
+    if (!res.ok) return null;
+    return await res.json().catch(() => null);
+  }
+
+  async function confirm() {
+    show('confirming');
+    for (let i = 0; i < CONFIRM_TRIES; i++) {
+      const p = await readState();
+      // Kept even when the answer is "still payable", so the timeout panel
+      // below can name the invoice. render() is what usually sets this, and
+      // polling deliberately does not call it while the state has not moved.
+      if (p) summary = p;
+      // A settled invoice, or one that moved to a state polling cannot change,
+      // is an answer. Only "still payable" is worth waiting on.
+      if (p && p.state && p.state !== 'payable') { render(p); return; }
+      await new Promise(function (r) { setTimeout(r, CONFIRM_EVERY_MS); });
+    }
+    // The window closed with the invoice still open. Say so plainly, name the
+    // invoice so they have something to quote, and do NOT offer to pay again.
+    document.getElementById('unconfirmed-ref').textContent =
+      summary && summary.invoice_no
+        ? 'Invoice ' + summary.invoice_no + '.'
+        : '';
+    show('unconfirmed');
+  }
+
+  document.getElementById('recheck').addEventListener('click', confirm);
+
+  if (returningFromCheckout()) {
+    confirm();
+  } else {
+    load();
+  }
 </script>
 </body>
 </html>
