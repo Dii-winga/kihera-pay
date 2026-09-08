@@ -93,6 +93,37 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion: reduce){.spinner{animation:none}}
 
+  /* Paying by transfer. A quiet card, deliberately below the Paystack button
+     where one exists: card and MoMo checkout clears the invoice by itself,
+     and a transfer needs somebody at the farm to confirm it. */
+  .or{display:flex;align-items:center;gap:12px;margin-top:22px;color:var(--muted);
+      font-size:12px;letter-spacing:.6px;text-transform:uppercase;font-weight:600}
+  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--hair)}
+  .dest{border-top:1px solid var(--hair);margin-top:14px;padding-top:14px}
+  .dest:first-of-type{border-top:0;margin-top:0;padding-top:0}
+  .dest .who{font-size:11px;letter-spacing:.8px;text-transform:uppercase;
+             color:var(--lime-deep);font-weight:600}
+  .dest .inst{font-size:15px;font-weight:600;color:var(--dark);margin-top:4px}
+  /* The number people copy off a phone screen onto a banking app. Tabular so
+     the digits line up, and selectable rather than a button, because a copy
+     button that silently fails is worse than no button. */
+  .dest .acct{font-size:19px;font-weight:700;color:var(--ink);margin-top:6px;
+              font-variant-numeric:tabular-nums;letter-spacing:.5px;
+              user-select:all;overflow-wrap:anywhere}
+  .dest .name{font-size:13px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
+  .dest .extra{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.55}
+  input[type=text],input[type=date]{width:100%;font:inherit;font-size:16px;
+    padding:12px 14px;border:1px solid var(--hair);border-radius:10px;
+    background:#fff;color:var(--ink)}
+  input[type=text]:focus,input[type=date]:focus{outline:2px solid var(--lime-deep);
+    outline-offset:1px}
+  .field{margin-top:14px}
+  .field:first-child{margin-top:0}
+  .seg{display:flex;gap:8px;margin-top:6px}
+  .seg button{flex:1;margin-top:0;min-height:46px;font-size:14px;
+              background:#fff;color:var(--ink);border:1px solid var(--hair)}
+  .seg button[aria-pressed=true]{background:var(--dark);color:#fff;border-color:var(--dark)}
+  #claim-done{background:var(--lime-tint);border-color:var(--lime-deep)}
   footer{text-align:center;font-size:11px;color:var(--faint);margin-top:24px;
     line-height:1.8}
   .hidden{display:none}
@@ -224,8 +255,79 @@
 
     <button id="pay" type="button"></button>
 
-    <p class="note">You will be taken to Paystack to pay by mobile money or
-      card. Kihera never sees your card or mobile money details.</p>
+    <p class="note" id="provider-note">You will be taken to Paystack to pay by
+      mobile money or card. Kihera never sees your card or mobile money
+      details.</p>
+
+    <!-- PAYING DIRECTLY. Most customers in this market will not use a card
+         checkout; they send money to the farm's bank or MoMo and tell
+         somebody. The details are the farm's own, published by the farm.
+
+         WHAT THIS FORM IS: a message, not a payment. Nothing typed here
+         touches the invoice. It files a claim that a member of the farm with
+         money authority must confirm, and the copy says so in those words -
+         the page must never leave somebody believing their invoice is settled
+         because they filled in a form. -->
+    <div id="manual-wrap" class="hidden">
+      <div class="or" id="manual-or">Or send it directly</div>
+
+      <div class="card" id="manual-card">
+        <div id="dest-list"></div>
+      </div>
+
+      <div class="card" id="claim-card">
+        <p class="hint" id="claim-lead">Already sent it? Tell the farm, and
+          they will confirm it against their statement.</p>
+
+        <div class="field">
+          <label for="claim-amount">How much did you send?</label>
+          <div class="amountrow">
+            <span class="cur" id="claim-cur"></span>
+            <input id="claim-amount" type="text" inputmode="decimal"
+                   autocomplete="off">
+          </div>
+        </div>
+
+        <div class="field">
+          <label id="claim-method-label">How did you send it?</label>
+          <div class="seg" role="group" aria-labelledby="claim-method-label">
+            <button type="button" id="claim-bank" aria-pressed="false">Bank transfer</button>
+            <button type="button" id="claim-momo" aria-pressed="false">Mobile money</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="claim-ref">Transaction reference</label>
+          <input id="claim-ref" type="text" autocomplete="off"
+                 aria-describedby="claim-ref-hint">
+          <p class="hint" id="claim-ref-hint">The reference on your transfer or
+            the transaction id in your mobile money message. It is how the farm
+            finds your payment.</p>
+        </div>
+
+        <div class="field">
+          <label for="claim-name">Your name (optional)</label>
+          <input id="claim-name" type="text" autocomplete="name">
+        </div>
+
+        <div class="field">
+          <label for="claim-date">When did you send it? (optional)</label>
+          <input id="claim-date" type="date">
+        </div>
+
+        <div id="claim-error" class="err hidden" role="alert"></div>
+
+        <button id="claim-send" type="button">Tell the farm I have paid</button>
+        <p class="note">This does not clear the invoice on its own. The farm
+          confirms it against their records first.</p>
+      </div>
+
+      <div class="card hidden" id="claim-done">
+        <p class="hint" id="claim-done-text">Thank you. The farm has your
+          message and will confirm it against their statement. The invoice will
+          keep showing the full amount until they do.</p>
+      </div>
+    </div>
   </div>
 
   <footer id="footer" class="hidden">
@@ -242,6 +344,7 @@
   const SUPABASE_URL = 'https://eexgyyzsycdscfjkqaxu.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_G-d7lJcxF1W3r5-43ObfdQ_fR5EwU8R';
   const PAY_INIT = SUPABASE_URL + '/functions/v1/pay-init';
+  const PAY_CLAIM = SUPABASE_URL + '/functions/v1/pay-claim';
 
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
                   'Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -374,8 +477,93 @@
       + 'same link keeps working for it.';
     partAmount(null);
 
+    // THE PAYSTACK HALF, only where the farm is enabled for it. A farm that
+    // takes only bank transfers now gets this page too (0255), and showing it
+    // a Pay button that cannot work would be worse than showing none.
+    const online = p.provider_enabled === true;
+    document.getElementById('pay').classList.toggle('hidden', !online);
+    document.getElementById('provider-note').classList.toggle('hidden', !online);
+    document.getElementById('part-card').classList.toggle('hidden', !online);
+
+    renderManual(p, online);
     renderPartReceipt(p);
     show('payable');
+  }
+
+  /// The farm's own bank and MoMo details, and the form that tells them money
+  /// was sent. Both are absent unless the farm has published somewhere to send
+  /// it - an empty "or send it directly" heading over nothing is a dead end.
+  function renderManual(p, online) {
+    const dests = Array.isArray(p.manual) ? p.manual : [];
+    const wrap = document.getElementById('manual-wrap');
+    wrap.classList.toggle('hidden', dests.length === 0);
+    // "Or" only when there is something to be an alternative TO.
+    document.getElementById('manual-or').textContent =
+      online ? 'Or send it directly' : 'Send it directly';
+    if (dests.length === 0) return;
+
+    const list = document.getElementById('dest-list');
+    list.textContent = '';
+    for (const d of dests) {
+      const box = document.createElement('div');
+      box.className = 'dest';
+      // textContent throughout, never innerHTML: every one of these strings is
+      // typed by a farm into a settings form and rendered on a public page.
+      const who = document.createElement('div');
+      who.className = 'who';
+      who.textContent = d.kind === 'momo' ? 'Mobile money' : 'Bank transfer';
+      const inst = document.createElement('div');
+      inst.className = 'inst';
+      inst.textContent = d.institution || '';
+      const acct = document.createElement('div');
+      acct.className = 'acct';
+      acct.textContent = d.account_number || '';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = d.account_name || '';
+      box.append(who, inst, acct, name);
+      if (d.instructions) {
+        const extra = document.createElement('div');
+        extra.className = 'extra';
+        extra.textContent = d.instructions;
+        box.append(extra);
+      }
+      list.append(box);
+    }
+
+    // The form resets on every render, for the same reason the part-payment
+    // box does: a figure typed against an older balance must not survive.
+    document.getElementById('claim-cur').textContent =
+      (p.display_form === 'code' ? p.currency : p.currency_symbol) || '';
+    document.getElementById('claim-amount').value = money(p).replace(/[^0-9.]/g, '');
+    document.getElementById('claim-ref').value = '';
+    document.getElementById('claim-name').value = '';
+    document.getElementById('claim-date').value = '';
+    claimMethod(dests.length === 1 ? (dests[0].kind || null) : null);
+    document.getElementById('claim-card').classList.remove('hidden');
+    document.getElementById('claim-done').classList.add('hidden');
+    hideClaimError();
+  }
+
+  /// Which of the two the payer says they used. Null until they choose: a
+  /// pre-picked method is a wrong answer nobody reads.
+  let claimWanted = null;
+
+  function claimMethod(kind) {
+    claimWanted = kind === 'bank' || kind === 'momo' ? kind : null;
+    document.getElementById('claim-bank')
+      .setAttribute('aria-pressed', String(claimWanted === 'bank'));
+    document.getElementById('claim-momo')
+      .setAttribute('aria-pressed', String(claimWanted === 'momo'));
+  }
+
+  function showClaimError(msg) {
+    const el = document.getElementById('claim-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+  function hideClaimError() {
+    document.getElementById('claim-error').classList.add('hidden');
   }
 
   /// Amount in MINOR units the payer wants to pay, or null for the whole
@@ -576,15 +764,105 @@
   /// Client-side only, and only so the button and the message can be helpful.
   /// The server refuses the same cases with `amount_invalid`, and its answer is
   /// the one that counts.
-  function readTypedMinor() {
+  function readTypedMinor(id) {
     if (!summary) return 0;
-    const raw = document.getElementById('part-amount').value.trim()
+    const raw = document.getElementById(id || 'part-amount').value.trim()
       .replace(/,/g, '');
     if (raw === '' || !/^\d*\.?\d*$/.test(raw)) return 0;
     const digits = Number(summary.minor_digits ?? 2);
     const minor = Math.round(Number(raw) * Math.pow(10, digits));
     if (!Number.isFinite(minor) || minor <= 0) return 0;
     return minor;
+  }
+
+  // ---- telling the farm about a transfer -------------------------------
+  document.getElementById('claim-bank').addEventListener('click', function () {
+    hideClaimError();
+    claimMethod('bank');
+  });
+  document.getElementById('claim-momo').addEventListener('click', function () {
+    hideClaimError();
+    claimMethod('momo');
+  });
+  document.getElementById('claim-send').addEventListener('click', sendClaim);
+
+  /// Files the claim. NOT A PAYMENT: the answer is only ever "we have it", and
+  /// the page keeps showing the full amount due, because the invoice has not
+  /// moved and must not look as though it has.
+  async function sendClaim() {
+    hideClaimError();
+    const minor = readTypedMinor('claim-amount');
+    if (minor <= 0) {
+      showClaimError('Enter the amount you sent.');
+      return;
+    }
+    if (claimWanted === null) {
+      showClaimError('Choose whether you sent it by bank transfer or mobile money.');
+      return;
+    }
+    const reference = document.getElementById('claim-ref').value.trim();
+    if (reference === '') {
+      showClaimError('Enter the reference on your transfer, so the farm can find it.');
+      return;
+    }
+
+    const btn = document.getElementById('claim-send');
+    btn.disabled = true;
+    btn.textContent = 'Sending';
+    try {
+      const res = await fetch(PAY_CLAIM, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'authorization': 'Bearer ' + SUPABASE_KEY,
+        },
+        body: JSON.stringify({
+          token: TOKEN,
+          amount_minor: minor,
+          method: claimWanted,
+          reference: reference,
+          payer_name: document.getElementById('claim-name').value.trim(),
+          paid_on: document.getElementById('claim-date').value || null,
+        }),
+      });
+      const body = await res.json().catch(function () { return null; });
+      if (!res.ok || !body || body.ok !== true) {
+        showClaimError(claimMessage(body && body.error));
+        return;
+      }
+      // Done. The form goes, the acknowledgement stays, and the amount due
+      // above it is untouched - which is the honest picture.
+      document.getElementById('claim-card').classList.add('hidden');
+      document.getElementById('claim-done').classList.remove('hidden');
+    } catch (_e) {
+      showClaimError('Could not reach the farm just now. Try again in a moment.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Tell the farm I have paid';
+    }
+  }
+
+  function claimMessage(code) {
+    switch (code) {
+      case 'too_many_pending':
+        return 'The farm already has several messages about this invoice. '
+             + 'Give them a moment to go through them before sending another.';
+      case 'amount_invalid':
+        return 'That amount does not look right. Enter what you actually sent.';
+      case 'reference_invalid':
+      case 'reference_required':
+        return 'Enter the reference on your transfer, so the farm can find it.';
+      case 'method_invalid':
+        return 'Choose whether you sent it by bank transfer or mobile money.';
+      case 'date_invalid':
+        return 'That date does not look right.';
+      case 'name_invalid':
+        return 'That name is too long.';
+      default:
+        // Same generic answer the rest of this page gives, for the same reason.
+        return 'This invoice cannot take a message right now. Contact the farm.';
+    }
   }
 
   // THE RETURN FROM PAYSTACK IS INFORMATIONAL, AND THAT IS NOT THE SAME AS
