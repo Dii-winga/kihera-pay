@@ -647,7 +647,11 @@
     paid: 'This invoice has already been paid.',
     cancelled: 'This invoice was cancelled.',
     amount_invalid: 'Enter an amount between the smallest unit and the full '
-      + 'amount due.'
+      + 'amount due.',
+    // 0257. A rate limit is temporary and the wording has to say so, or
+    // somebody reads it as a refusal and stops trying to pay.
+    rate_limited: 'That was a lot of tries at once. Wait a minute, then try '
+      + 'again.'
   };
 
   async function pay() {
@@ -845,6 +849,8 @@
 
   function claimMessage(code) {
     switch (code) {
+      case 'rate_limited':
+        return 'That was a lot of tries at once. Wait a minute, then try again.';
       case 'too_many_pending':
         return 'The farm already has several messages about this invoice. '
              + 'Give them a moment to go through them before sending another.';
