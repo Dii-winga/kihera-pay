@@ -19,6 +19,13 @@
   .wrap{max-width:460px;margin:0 auto}
 
   header{text-align:center;padding:36px 0 18px}
+  /* The farm's mark, on the page where somebody is about to send them money.
+     Bounded so a tall logo cannot push the amount off the first screen, and
+     hidden until it actually loads - a broken-image icon above a bank account
+     number is worse than no logo at all. */
+  .farmlogo{display:none;max-height:56px;max-width:180px;object-fit:contain;
+            margin-bottom:10px}
+  .farmlogo.on{display:block}
   .farmname{font-size:20px;font-weight:700;color:var(--dark);line-height:1.3;
     overflow-wrap:anywhere}
   .kicker{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;
@@ -198,6 +205,7 @@
 
   <div id="payable" class="hidden">
     <header>
+      <img class="farmlogo" id="farm-logo" alt="">
       <div class="farmname" id="farm-name"></div>
       <div class="kicker">Pay invoice</div>
     </header>
@@ -374,6 +382,26 @@
   }
 
   // token = last path segment (/i/{token}) or ?i= fallback for local work
+  // Today, in the browser's own timezone, as a date input wants it.
+  //
+  // NOT toISOString(), which is UTC: a customer paying at 9pm in Accra would
+  // be offered tomorrow, and one further west would be refused today. The
+  // server refuses a future date anyway (0269); this is so nobody has to be
+  // refused for picking the obvious wrong thing out of a calendar.
+  function todayLocal() {
+    var d = new Date();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
+  }
+
+  var logoAsked = false;
+
+  (function capTheDate() {
+    var box = document.getElementById('claim-date');
+    if (box) box.max = todayLocal();
+  })();
+
   function readToken() {
     const q = new URLSearchParams(location.search).get('i');
     if (q) return q.trim();
@@ -450,6 +478,22 @@
       return;
     }
     if (state !== 'payable') { show('unavailable'); return; }
+
+    // The logo, if the farm has one. It arrives as a redirect to a signed
+    // Storage URL rather than in the summary above, because the bucket is
+    // private and Postgres cannot sign; see 0270. Shown only once it has
+    // actually loaded - a broken-image icon sitting above a bank account
+    // number is worse than the name on its own, which is what this page
+    // showed before and still shows if anything goes wrong.
+    var logo = document.getElementById('farm-logo');
+    if (logo && !logoAsked) {
+      logoAsked = true;
+      logo.onload = function () { logo.classList.add('on'); };
+      logo.onerror = function () { logo.classList.remove('on'); };
+      logo.alt = p.farm_name || '';
+      logo.src = SUPABASE_URL + '/functions/v1/pay-logo?t=' +
+                 encodeURIComponent(readToken());
+    }
 
     document.getElementById('farm-name').textContent = p.farm_name || '';
     document.getElementById('footer-farm').textContent = p.farm_name || '';
@@ -861,6 +905,8 @@
         return 'Enter the reference on your transfer, so the farm can find it.';
       case 'method_invalid':
         return 'Choose whether you sent it by bank transfer or mobile money.';
+      case 'paid_on_future':
+        return 'That date is in the future. Put the day you actually sent it.';
       case 'date_invalid':
         return 'That date does not look right.';
       case 'name_invalid':
