@@ -9,8 +9,9 @@
 <style>
   :root{
     --dark:#012527; --lime:#64C01E; --lime-deep:#3D7A16; --lime-tint:#EEF8E4;
-    --ink:#0E1A1A; --muted:#66716F; --faint:#B2BAB8; --hair:#E4E7E6;
-    --warn:#B5820A; --warn-tint:#FDF3D6; --danger:#C4342F; --danger-tint:#FBE9E8;
+    --ink:#0E1A1A; --muted:#5C6867; --faint:#B2BAB8; --hair:#E4E7E6;
+    --warn:#B5820A; --warn-tint:#FDF3D6; --warn-ink:#6B4E05;
+    --danger:#C4342F; --danger-tint:#FBE9E8;
     --bg:#F4F6F5;
   }
   *{box-sizing:border-box;margin:0;padding:0}
@@ -18,18 +19,23 @@
     -webkit-font-smoothing:antialiased;line-height:1.5;padding:0 16px 48px}
   .wrap{max-width:460px;margin:0 auto}
 
-  header{text-align:center;padding:36px 0 18px}
+  /* THE IDENTITY IS ONE GROUP, ON ONE AXIS.
+     `text-align:center` centres text and does nothing at all to a block-level
+     <img>, which is why the logo used to sit hard left above centred text.
+     A flex column with align-items:center centres all three, and the gap keeps
+     them reading as one mark rather than three stacked things. */
+  header{display:flex;flex-direction:column;align-items:center;text-align:center;
+    gap:6px;padding:28px 0 16px}
   /* The farm's mark, on the page where somebody is about to send them money.
      Bounded so a tall logo cannot push the amount off the first screen, and
      hidden until it actually loads - a broken-image icon above a bank account
      number is worse than no logo at all. */
-  .farmlogo{display:none;max-height:56px;max-width:180px;object-fit:contain;
-            margin-bottom:10px}
+  .farmlogo{display:none;max-height:52px;max-width:170px;object-fit:contain}
   .farmlogo.on{display:block}
   .farmname{font-size:20px;font-weight:700;color:var(--dark);line-height:1.3;
     overflow-wrap:anywhere}
   .kicker{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;
-    color:var(--lime-deep);font-weight:600;margin-top:12px}
+    color:var(--lime-deep);font-weight:600}
 
   .card{background:#fff;border:1px solid var(--hair);border-radius:14px;
     padding:20px 18px;margin-top:14px;box-shadow:0 2px 10px rgba(1,37,39,.05)}
@@ -56,13 +62,9 @@
                   margin-top:10px;font-size:15px}
   .receipt .rline .k{color:var(--muted)}
   .receipt .rline .v{color:var(--ink);font-weight:600}
-  #part-card{margin-top:-4px;text-align:center}
-  #part-card #part-fields{background:var(--surface);border:1px solid var(--hair);
-                          border-radius:14px;padding:16px;margin-top:10px;
-                          text-align:left}
   .linkish{background:none;border:0;padding:0;color:var(--lime-deep);
            font:inherit;font-size:14px;font-weight:600;text-decoration:underline;
-           cursor:pointer;width:auto;min-height:44px}
+           cursor:pointer;width:auto;min-height:44px;text-align:left}
   .amountrow{display:flex;align-items:center;gap:8px;margin-top:6px}
   .amountrow .cur{color:var(--muted);font-size:15px;font-weight:600;flex:none}
   .amountrow input{margin:0}
@@ -72,10 +74,11 @@
   .meta .v{color:var(--ink);font-weight:600;overflow-wrap:anywhere}
 
   label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  .optional{font-weight:400}
   input[type=email]{width:100%;font:inherit;font-size:16px;padding:12px 14px;
     border:1px solid var(--hair);border-radius:10px;background:#fff;color:var(--ink)}
   input[type=email]:focus{outline:2px solid var(--lime-deep);outline-offset:1px}
-  .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.55}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.55}
 
   button{width:100%;font:inherit;font-weight:600;font-size:16px;min-height:52px;
     margin-top:16px;border:0;border-radius:12px;background:var(--dark);color:#fff;
@@ -94,43 +97,118 @@
   .chip{display:inline-block;font-size:12px;font-weight:600;padding:6px 14px;
     border-radius:999px;margin-bottom:14px}
   .chip.ok{background:var(--lime-tint);color:var(--lime-deep)}
-  .chip.warn{background:var(--warn-tint);color:var(--warn)}
+  .chip.warn{background:var(--warn-tint);color:var(--warn-ink)}
   .spinner{width:26px;height:26px;border:3px solid var(--hair);border-top-color:var(--lime);
     border-radius:50%;margin:0 auto 16px;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion: reduce){.spinner{animation:none}}
 
-  /* Paying by transfer. A quiet card, deliberately below the Paystack button
-     where one exists: card and MoMo checkout clears the invoice by itself,
-     and a transfer needs somebody at the farm to confirm it. */
-  .or{display:flex;align-items:center;gap:12px;margin-top:22px;color:var(--muted);
-      font-size:12px;letter-spacing:.6px;text-transform:uppercase;font-weight:600}
-  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--hair)}
-  .dest{border-top:1px solid var(--hair);margin-top:14px;padding-top:14px}
-  .dest:first-of-type{border-top:0;margin-top:0;padding-top:0}
+  /* ---- THE TWO WAYS TO PAY --------------------------------------------
+     Both collapsed on arrival, so the page opens on what is owed and a
+     choice, not on a form. Transfer FIRST: in this market most customers
+     send the money themselves, and the one that clears the invoice by
+     itself is the one they are less likely to use.
+
+     The difference between them is stated while they are still closed. It
+     is the single most important sentence on this page - a customer who
+     believes a reported transfer settled the invoice will not chase it. */
+  .route{margin-top:12px}
+  .routehead{display:flex;align-items:flex-start;gap:12px;width:100%;
+    text-align:left;background:#fff;color:var(--ink);border:1px solid var(--hair);
+    border-radius:14px;padding:15px 16px;min-height:64px;margin-top:0;
+    font-weight:400;box-shadow:0 2px 10px rgba(1,37,39,.05)}
+  .routehead[aria-expanded=true]{border-color:var(--dark);
+    border-bottom-left-radius:0;border-bottom-right-radius:0}
+  .rtext{flex:1;min-width:0}
+  .rtitle{display:block;font-size:15.5px;font-weight:600;color:var(--dark);
+    line-height:1.35;overflow-wrap:anywhere}
+  .rsub{display:block;font-size:12.5px;color:var(--muted);margin-top:5px;
+    line-height:1.5;overflow-wrap:anywhere}
+  /* A chevron, and never the only signal that a section is open: the button
+     carries aria-expanded, and the panel below it carries a visible border. */
+  .chev{flex:none;width:11px;height:11px;margin-top:7px;
+    border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);
+    transform:rotate(45deg);transition:transform .15s}
+  .routehead[aria-expanded=true] .chev{transform:rotate(-135deg);margin-top:11px}
+  @media (prefers-reduced-motion: reduce){.chev{transition:none}}
+  .routebody{border:1px solid var(--dark);border-top:0;
+    border-bottom-left-radius:14px;border-bottom-right-radius:14px;
+    padding:16px;background:#FAFBFA}
+  .routebody .card:first-child{margin-top:0}
+  /* The invoice, repeated where the customer is actually typing.
+     A sticky bar was the other option and was rejected: at 320px with the
+     keyboard up it covers the field it is meant to be helping with. */
+  .compact{font-size:12.5px;color:var(--muted);font-weight:600;
+    margin-bottom:12px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+
+  /* ---- copying ---------------------------------------------------------
+     Every value a customer has to retype into a banking app: the reference,
+     and each account number. Selectable as well as copyable, because a copy
+     button that silently fails is worse than no button. */
+  .refbox{background:var(--lime-tint);border:1px solid var(--lime-deep);
+    border-radius:10px;padding:12px 14px}
+  .refbox .lead{font-size:14px;line-height:1.6;color:var(--ink);
+    overflow-wrap:anywhere}
+  .refbox .lead b{color:var(--dark);font-weight:700;user-select:all;
+    font-variant-numeric:tabular-nums}
+  .copy{width:auto;min-height:44px;margin-top:10px;padding:10px 16px;
+    font-size:14px;font-weight:600;background:#fff;color:var(--dark);
+    border:1px solid var(--dark);border-radius:10px}
+  .say{font-size:12.5px;font-weight:600;color:var(--lime-deep);margin-top:12px;
+    line-height:1.5;overflow-wrap:anywhere}
+  .say.bad{color:var(--danger)}
+  .say:empty{margin-top:0}
+
+  .dest{border-top:1px solid var(--hair);margin-top:16px;padding-top:16px}
   .dest .who{font-size:11px;letter-spacing:.8px;text-transform:uppercase;
              color:var(--lime-deep);font-weight:600}
   .dest .inst{font-size:15px;font-weight:600;color:var(--dark);margin-top:4px}
   /* The number people copy off a phone screen onto a banking app. Tabular so
-     the digits line up, and selectable rather than a button, because a copy
-     button that silently fails is worse than no button. */
+     the digits line up, and selectable as well as copyable. Rendered exactly
+     as the farm published it: no grouping is inserted, because a payer
+     matching digits against their bank app should see the same string their
+     bank does. */
   .dest .acct{font-size:19px;font-weight:700;color:var(--ink);margin-top:6px;
               font-variant-numeric:tabular-nums;letter-spacing:.5px;
               user-select:all;overflow-wrap:anywhere}
   .dest .name{font-size:13px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
   .dest .extra{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.55}
+
   input[type=text],input[type=date]{width:100%;font:inherit;font-size:16px;
     padding:12px 14px;border:1px solid var(--hair);border-radius:10px;
     background:#fff;color:var(--ink)}
   input[type=text]:focus,input[type=date]:focus{outline:2px solid var(--lime-deep);
     outline-offset:1px}
-  .field{margin-top:14px}
+  .field{margin-top:16px}
   .field:first-child{margin-top:0}
-  .seg{display:flex;gap:8px;margin-top:6px}
-  .seg button{flex:1;margin-top:0;min-height:46px;font-size:14px;
-              background:#fff;color:var(--ink);border:1px solid var(--hair)}
-  .seg button[aria-pressed=true]{background:var(--dark);color:#fff;border-color:var(--dark)}
-  #claim-done{background:var(--lime-tint);border-color:var(--lime-deep)}
+  /* The warning sits ABOVE the fields, not under the button: somebody who
+     reads one sentence on this form has to read this one. */
+  .warnbox{background:var(--warn-tint);color:var(--warn-ink);border-radius:10px;
+    padding:12px 14px;font-size:13px;line-height:1.6}
+  /* Bank / mobile money. `flex-wrap` with a wide basis is what makes them
+     stack rather than truncate at 320px or at 200% text. */
+  .seg{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .seg button{flex:1 1 128px;margin-top:0;min-height:48px;font-size:14px;
+              background:#fff;color:var(--ink);border:1px solid var(--hair);
+              display:flex;align-items:center;justify-content:center;gap:8px}
+  /* Chosen is said THREE ways: the tick, the fill, and aria-checked. Colour
+     is never on its own here. */
+  .seg button[aria-checked=true]{background:var(--dark);color:#fff;
+              border-color:var(--dark)}
+  .mark{flex:none;font-size:13px;font-weight:700}
+
+  .kv{display:flex;justify-content:space-between;gap:12px;margin-top:10px;
+      font-size:14px;flex-wrap:wrap}
+  .kv .k{color:var(--muted)}
+  .kv .v{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  .kv.now .v{color:var(--dark);font-weight:700}
+  #part-card{margin-top:16px}
+  #part-fields{border:1px solid var(--hair);border-radius:12px;padding:14px;
+               margin-top:10px;background:#fff}
+  /* NOT the green the receipt uses. A reported transfer is not a payment, and
+     a green card is read as "done" before a single word of it is. */
+  #claim-done{background:var(--warn-tint);border-color:var(--warn)}
+  #claim-done .chip.warn{background:#fff}
   footer{text-align:center;font-size:11px;color:var(--faint);margin-top:24px;
     line-height:1.8}
   .hidden{display:none}
@@ -174,11 +252,16 @@
        which invites paying twice. This panel is what they see instead while the
        page asks the server again. The state still only ever comes from the
        server - the query string is a hint that a payment is in flight, never
-       evidence that it succeeded. -->
+       evidence that it succeeded.
+
+       It replaces the whole payable panel, which is also how the transfer form
+       is kept out of reach while a card payment is in the air: there is no
+       second route on screen to be tempted by. -->
   <div id="confirming" class="state hidden" role="status" aria-live="polite">
     <div class="spinner"></div>
-    <h1>Confirming your payment</h1>
-    <p>This takes a few seconds. Do not pay again or close this page.</p>
+    <h1>We are checking your payment</h1>
+    <p>This takes a few seconds. Please do not pay again, and do not close this
+       page.</p>
   </div>
 
   <!-- The window closed without confirmation. Never an error, and never a Pay
@@ -187,9 +270,10 @@
     <span class="chip warn">Not confirmed yet</span>
     <h1>We have not had confirmation</h1>
     <p id="unconfirmed-ref"></p>
-    <p>If money left your account it will be applied to this invoice. Do not
-       pay again. Contact the farm that sent this invoice if you are unsure.</p>
-    <button id="recheck" type="button">Check again</button>
+    <p>This is not the same as a failed payment. If money left your account it
+       will be applied to this invoice. Do not pay again. Contact the farm that
+       sent this invoice if you are unsure.</p>
+    <button id="recheck" type="button">Check payment again</button>
   </div>
 
   <div id="cancelled" class="state hidden">
@@ -233,116 +317,179 @@
       </div>
     </div>
 
-    <!-- PART PAYMENT. Full is the default and stays one tap; paying less is a
-         deliberate second action, because most people pay what they owe and a
-         prefilled editable box invites a typo into a payment. -->
-    <div id="part-card">
-      <button id="part-toggle" type="button" class="linkish">Pay part of this instead</button>
-      <div id="part-fields" class="hidden">
-        <label for="part-amount">How much are you paying now?</label>
-        <div class="amountrow">
-          <span class="cur" id="part-cur"></span>
-          <input id="part-amount" type="text" inputmode="decimal"
-                 autocomplete="off" aria-describedby="part-hint">
+    <!-- ================= ROUTE 1: THE CUSTOMER SENDS IT ================= -->
+    <div class="route hidden" id="manual-wrap">
+      <button class="routehead" id="route-manual" type="button"
+              aria-expanded="false" aria-controls="manual-panel">
+        <span class="rtext">
+          <span class="rtitle">Pay by mobile money or bank transfer</span>
+          <span class="rsub" id="manual-sub"></span>
+        </span>
+        <span class="chev" aria-hidden="true"></span>
+      </button>
+
+      <div class="routebody hidden" id="manual-panel">
+        <p class="compact" id="manual-context"></p>
+
+        <div class="card" id="manual-card">
+          <!-- The reference is the whole of reconciliation. Without it the
+               farm has a credit on a statement and no invoice to put it
+               against, and the customer waits. -->
+          <div class="refbox">
+            <p class="lead" id="ref-lead"></p>
+            <button type="button" class="copy" id="copy-ref">Copy reference</button>
+          </div>
+
+          <div id="dest-list"></div>
+
+          <!-- One live region for every copy in this panel. Visible as well as
+               announced: a message only a screen reader hears is not a
+               confirmation for the person holding the phone. -->
+          <p class="say" id="copy-say" role="status" aria-live="polite"></p>
         </div>
-        <p class="hint" id="part-hint"></p>
-        <button id="part-cancel" type="button" class="linkish">Pay the full amount instead</button>
+
+        <button type="button" class="linkish" id="claim-toggle"
+                aria-expanded="false" aria-controls="claim-card">Already
+          transferred? Report it</button>
+
+        <div class="card hidden" id="claim-card">
+          <!-- WHAT THIS FORM IS: a message, not a payment. Nothing typed here
+               touches the invoice. It files a claim that a member of the farm
+               with money authority must confirm, and the copy says so in those
+               words, above the fields - the page must never leave somebody
+               believing their invoice is settled because they filled in a
+               form. -->
+          <div class="warnbox" id="claim-warn"></div>
+
+          <div class="field">
+            <label for="claim-amount">Exact amount sent</label>
+            <div class="amountrow">
+              <span class="cur" id="claim-cur"></span>
+              <input id="claim-amount" type="text" inputmode="decimal"
+                     autocomplete="off" required aria-required="true"
+                     aria-describedby="claim-balance">
+            </div>
+            <p class="hint" id="claim-balance"></p>
+          </div>
+
+          <div class="field">
+            <label id="claim-method-label">How did you send it?</label>
+            <div class="seg" role="radiogroup" aria-labelledby="claim-method-label">
+              <button type="button" id="claim-bank" role="radio" aria-checked="false"
+                ><span class="mark" id="claim-bank-mark" aria-hidden="true"></span
+                ><span>Bank transfer</span></button>
+              <button type="button" id="claim-momo" role="radio" aria-checked="false"
+                ><span class="mark" id="claim-momo-mark" aria-hidden="true"></span
+                ><span>Mobile money</span></button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="claim-ref">Transaction reference</label>
+            <input id="claim-ref" type="text" autocomplete="off"
+                   required aria-required="true" aria-describedby="claim-ref-hint">
+            <p class="hint" id="claim-ref-hint">Enter the reference from your
+              bank receipt or mobile money message. It is how the farm finds
+              your payment.</p>
+          </div>
+
+          <div class="field">
+            <label for="claim-name">Your name <span class="optional">(optional)</span></label>
+            <input id="claim-name" type="text" autocomplete="name">
+          </div>
+
+          <div class="field">
+            <!-- Optional in the server contract too: Postgres defaults it to
+                 today. Left empty rather than prefilled, because a transfer
+                 made on Friday and reported on Monday would otherwise be
+                 filed under the wrong day by nobody's decision. -->
+            <label for="claim-date">When did you send it?
+              <span class="optional">(optional)</span></label>
+            <input id="claim-date" type="date">
+          </div>
+
+          <div id="claim-error" class="err hidden" role="alert"></div>
+
+          <button id="claim-send" type="button">Submit transfer for confirmation</button>
+        </div>
+
+        <div class="card hidden" id="claim-done">
+          <span class="chip warn">Awaiting confirmation</span>
+          <p class="hint" id="claim-done-text"></p>
+        </div>
       </div>
     </div>
 
-    <div class="card" id="email-card" hidden>
-      <label for="email">Your email address</label>
-      <input id="email" type="email" inputmode="email" autocomplete="email"
-             placeholder="you@example.com" aria-describedby="email-hint">
-      <p class="hint" id="email-hint">Our payment provider needs an email
-        address to take the payment and send you a confirmation. It is used for
-        this payment only.</p>
-    </div>
+    <!-- ================= ROUTE 2: PAYSTACK CONFIRMS IT ================== -->
+    <div class="route hidden" id="online-wrap">
+      <button class="routehead" id="route-online" type="button"
+              aria-expanded="false" aria-controls="online-panel">
+        <span class="rtext">
+          <span class="rtitle">Pay online with Paystack</span>
+          <span class="rsub">Use mobile money or card. Confirmation is
+            automatic.</span>
+        </span>
+        <span class="chev" aria-hidden="true"></span>
+      </button>
 
-    <div id="error" class="err hidden" role="alert"></div>
+      <div class="routebody hidden" id="online-panel">
+        <p class="compact" id="online-context"></p>
 
-    <button id="pay" type="button"></button>
+        <div class="card" id="email-card" hidden>
+          <label for="email">Email address <span class="optional">(required)</span></label>
+          <input id="email" type="email" inputmode="email" autocomplete="email"
+                 placeholder="you@example.com" required aria-required="true"
+                 aria-describedby="email-hint">
+          <p class="hint" id="email-hint">Paystack uses this email to process
+            the payment and send your receipt. The farm does not add it to your
+            customer record.</p>
+        </div>
 
-    <p class="note" id="provider-note">You will be taken to Paystack to pay by
-      mobile money or card. Kihera never sees your card or mobile money
-      details.</p>
-
-    <!-- PAYING DIRECTLY. Most customers in this market will not use a card
-         checkout; they send money to the farm's bank or MoMo and tell
-         somebody. The details are the farm's own, published by the farm.
-
-         WHAT THIS FORM IS: a message, not a payment. Nothing typed here
-         touches the invoice. It files a claim that a member of the farm with
-         money authority must confirm, and the copy says so in those words -
-         the page must never leave somebody believing their invoice is settled
-         because they filled in a form. -->
-    <div id="manual-wrap" class="hidden">
-      <div class="or" id="manual-or">Or send it directly</div>
-
-      <div class="card" id="manual-card">
-        <div id="dest-list"></div>
-      </div>
-
-      <div class="card" id="claim-card">
-        <p class="hint" id="claim-lead">Already sent it? Tell the farm, and
-          they will confirm it against their statement.</p>
-
-        <div class="field">
-          <label for="claim-amount">How much did you send?</label>
-          <div class="amountrow">
-            <span class="cur" id="claim-cur"></span>
-            <input id="claim-amount" type="text" inputmode="decimal"
-                   autocomplete="off">
+        <!-- PART PAYMENT. Full is the default and stays one tap; paying less is
+             a deliberate second action, because most people pay what they owe
+             and a prefilled editable box invites a typo into a payment. -->
+        <div id="part-card">
+          <button id="part-toggle" type="button" class="linkish">Make a part payment</button>
+          <div id="part-fields" class="hidden">
+            <label for="part-amount">How much are you paying now?</label>
+            <div class="amountrow">
+              <span class="cur" id="part-cur"></span>
+              <input id="part-amount" type="text" inputmode="decimal"
+                     autocomplete="off" aria-describedby="part-hint">
+            </div>
+            <p class="hint" id="part-hint"></p>
+            <div id="part-sums" class="hidden">
+              <div class="kv"><span class="k">Invoice balance</span>
+                <span class="v" id="part-balance"></span></div>
+              <div class="kv now"><span class="k">Paying now</span>
+                <span class="v" id="part-now"></span></div>
+              <div class="kv"><span class="k">Remaining afterward</span>
+                <span class="v" id="part-rest"></span></div>
+            </div>
+            <button id="part-cancel" type="button" class="linkish">Pay the full amount instead</button>
           </div>
         </div>
 
-        <div class="field">
-          <label id="claim-method-label">How did you send it?</label>
-          <div class="seg" role="group" aria-labelledby="claim-method-label">
-            <button type="button" id="claim-bank" aria-pressed="false">Bank transfer</button>
-            <button type="button" id="claim-momo" aria-pressed="false">Mobile money</button>
-          </div>
-        </div>
+        <div id="error" class="err hidden" role="alert"></div>
 
-        <div class="field">
-          <label for="claim-ref">Transaction reference</label>
-          <input id="claim-ref" type="text" autocomplete="off"
-                 aria-describedby="claim-ref-hint">
-          <p class="hint" id="claim-ref-hint">The reference on your transfer or
-            the transaction id in your mobile money message. It is how the farm
-            finds your payment.</p>
-        </div>
+        <button id="pay" type="button"></button>
 
-        <div class="field">
-          <label for="claim-name">Your name (optional)</label>
-          <input id="claim-name" type="text" autocomplete="name">
-        </div>
-
-        <div class="field">
-          <label for="claim-date">When did you send it? (optional)</label>
-          <input id="claim-date" type="date">
-        </div>
-
-        <div id="claim-error" class="err hidden" role="alert"></div>
-
-        <button id="claim-send" type="button">Tell the farm I have paid</button>
-        <p class="note">This does not clear the invoice on its own. The farm
-          confirms it against their records first.</p>
-      </div>
-
-      <div class="card hidden" id="claim-done">
-        <p class="hint" id="claim-done-text">Thank you. The farm has your
-          message and will confirm it against their statement. The invoice will
-          keep showing the full amount until they do.</p>
+        <p class="note" id="provider-note">You will be taken to Paystack to pay
+          by mobile money or card. Paystack processes the payment; the farm
+          never sees your card or mobile money details.</p>
       </div>
     </div>
+
+    <!-- Neither route configured. The honest answer, rather than a page that
+         shows a figure and no way to send it. -->
+    <p class="note hidden" id="no-route">Contact the farm that sent this
+      invoice to arrange payment.</p>
   </div>
 
   <footer id="footer" class="hidden">
     <div id="footer-farm"></div>
   </footer>
 </div>
-
 <script>
   // The anon/publishable key is public by design - it ships in the mobile app
   // and on the traceability page. Every byte this page can see is decided by
@@ -432,6 +579,79 @@
   const TOKEN = readToken();
   let summary = null;
 
+  /// The farm, as a sentence can name it. Used in the two sentences that have
+  /// to say WHO confirms a transfer, which is the difference between the two
+  /// routes and the thing this page most has to get across.
+  function farmWord() {
+    return summary && summary.farm_name ? summary.farm_name : 'The farm';
+  }
+
+  // ---- the two routes ---------------------------------------------------
+  //
+  // Exactly one open at a time. Two open forms on one phone screen is how
+  // somebody sends a transfer AND starts a checkout for the same invoice.
+  // Nothing is re-rendered on a switch, so anything already typed in the other
+  // route is still there if they switch back.
+
+  let openRoute = null;
+
+  function setRoute(which) {
+    openRoute = which === 'manual' || which === 'online' ? which : null;
+    const rs = ['manual', 'online'];
+    for (const r of rs) {
+      const on = r === openRoute;
+      document.getElementById('route-' + r)
+        .setAttribute('aria-expanded', String(on));
+      document.getElementById(r + '-panel').classList.toggle('hidden', !on);
+    }
+    clearError();
+  }
+
+  document.getElementById('route-manual').addEventListener('click', function () {
+    setRoute(openRoute === 'manual' ? null : 'manual');
+  });
+  document.getElementById('route-online').addEventListener('click', function () {
+    setRoute(openRoute === 'online' ? null : 'online');
+  });
+
+  // ---- copying ----------------------------------------------------------
+  //
+  // NEVER CLAIMS A COPY IT DID NOT MAKE. `navigator.clipboard` is absent on an
+  // insecure origin and refuses outright in browsers that have not seen a
+  // gesture they trust; both land on the same branch, which says to copy it by
+  // hand next to a value that is still selectable (`user-select:all`). A page
+  // that said "copied" and had not is worse than one with no button, because
+  // the payer pastes whatever was in the clipboard before.
+
+  function say(msg, bad) {
+    const el = document.getElementById('copy-say');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.toggle('bad', bad === true);
+  }
+
+  async function copyValue(value, copied, byHand) {
+    const nav = typeof navigator === 'undefined' ? null : navigator;
+    try {
+      if (!nav || !nav.clipboard || !nav.clipboard.writeText) throw new Error('no clipboard');
+      await nav.clipboard.writeText(String(value));
+    } catch (_) {
+      say(byHand, true);
+      return false;
+    }
+    say(copied, false);
+    return true;
+  }
+
+  document.getElementById('copy-ref').addEventListener('click', function () {
+    const no = summary && summary.invoice_no ? summary.invoice_no : '';
+    if (no === '') return;
+    copyValue(no, 'Invoice reference copied',
+      'Could not copy. Select the invoice number above and copy it by hand.');
+  });
+
+  // ---- reading the invoice ----------------------------------------------
+
   // ONE copy of the request, used by the first load and by every poll. Two
   // copies is how a header ends up on one and not the other, which is exactly
   // the class of bug that kept the first deployment at the CORS preflight.
@@ -500,7 +720,6 @@
     document.getElementById('invoice-no').textContent = p.invoice_no || '-';
     const amount = money(p);
     document.getElementById('amount').textContent = amount;
-    document.getElementById('pay').textContent = 'Pay ' + amount;
 
     const dueWrap = document.getElementById('due-wrap');
     if (p.due_on) {
@@ -510,6 +729,44 @@
       dueWrap.classList.add('hidden');
     }
 
+    // The invoice, repeated inside whichever section is open, because by the
+    // time somebody is typing an amount the summary has scrolled away. Not a
+    // sticky bar: at 320px with the keyboard up it covers the field.
+    const context = (p.invoice_no || '-') + ' · ' + amount + ' due';
+    document.getElementById('manual-context').textContent = context;
+    document.getElementById('online-context').textContent = context;
+
+    // WHICH ROUTES THIS FARM ACTUALLY HAS. A farm with no Paystack gets a page
+    // too (0255), and showing it a Pay button that cannot work would be worse
+    // than showing none.
+    const online = p.provider_enabled === true;
+    const dests = Array.isArray(p.manual) ? p.manual : [];
+    const hasManual = dests.length > 0;
+
+    document.getElementById('online-wrap').classList.toggle('hidden', !online);
+    document.getElementById('manual-wrap').classList.toggle('hidden', !hasManual);
+    document.getElementById('no-route').classList.toggle('hidden', online || hasManual);
+
+    renderOnline(p);
+    renderManual(p, dests);
+    renderPartReceipt(p);
+
+    // Both shut is the resting state, and it is the point: the customer picks
+    // a route having read how each one gets confirmed. With only ONE route
+    // there is no choice to make, so it opens - a lone accordion that must be
+    // tapped before anything appears is a step that buys nothing. The heading
+    // and its sentence stay either way.
+    if (online && hasManual) setRoute(null);
+    else if (hasManual) setRoute('manual');
+    else if (online) setRoute('online');
+    else setRoute(null);
+
+    show('payable');
+  }
+
+  /// The Paystack half.
+  function renderOnline(p) {
+    document.getElementById('pay').textContent = 'Pay ' + money(p);
     document.getElementById('email-card').hidden = !p.email_required;
 
     // The part-payment control resets to closed on every render: an amount
@@ -520,42 +777,45 @@
       'Anything up to ' + money(p) + '. The rest stays on the invoice and this '
       + 'same link keeps working for it.';
     partAmount(null);
-
-    // THE PAYSTACK HALF, only where the farm is enabled for it. A farm that
-    // takes only bank transfers now gets this page too (0255), and showing it
-    // a Pay button that cannot work would be worse than showing none.
-    const online = p.provider_enabled === true;
-    document.getElementById('pay').classList.toggle('hidden', !online);
-    document.getElementById('provider-note').classList.toggle('hidden', !online);
-    document.getElementById('part-card').classList.toggle('hidden', !online);
-
-    renderManual(p, online);
-    renderPartReceipt(p);
-    show('payable');
   }
 
   /// The farm's own bank and MoMo details, and the form that tells them money
   /// was sent. Both are absent unless the farm has published somewhere to send
-  /// it - an empty "or send it directly" heading over nothing is a dead end.
-  function renderManual(p, online) {
-    const dests = Array.isArray(p.manual) ? p.manual : [];
-    const wrap = document.getElementById('manual-wrap');
-    wrap.classList.toggle('hidden', dests.length === 0);
-    // "Or" only when there is something to be an alternative TO.
-    document.getElementById('manual-or').textContent =
-      online ? 'Or send it directly' : 'Send it directly';
+  /// it - an empty heading over nothing is a dead end.
+  function renderManual(p, dests) {
+    const who = farmWord();
+    document.getElementById('manual-sub').textContent =
+      'Send it yourself. ' + who + ' confirms it after checking the statement.';
     if (dests.length === 0) return;
+
+    // "Use INV-000048 as your payment reference." Built as elements rather
+    // than markup for the same reason the destinations below are: the invoice
+    // number carries a per-farm prefix that a farm typed into a settings form.
+    const lead = document.getElementById('ref-lead');
+    const no = p.invoice_no || '';
+    lead.textContent = '';
+    const pre = document.createElement('span');
+    pre.textContent = 'Use ';
+    const strong = document.createElement('b');
+    strong.textContent = no;
+    const post = document.createElement('span');
+    post.textContent = ' as your payment reference.';
+    lead.append(pre, strong, post);
+    document.getElementById('copy-ref')
+      .setAttribute('aria-label', 'Copy invoice ' + no + ' payment reference');
 
     const list = document.getElementById('dest-list');
     list.textContent = '';
+    let n = 0;
     for (const d of dests) {
       const box = document.createElement('div');
       box.className = 'dest';
       // textContent throughout, never innerHTML: every one of these strings is
       // typed by a farm into a settings form and rendered on a public page.
-      const who = document.createElement('div');
-      who.className = 'who';
-      who.textContent = d.kind === 'momo' ? 'Mobile money' : 'Bank transfer';
+      const kindName = d.kind === 'momo' ? 'Mobile money' : 'Bank transfer';
+      const kindEl = document.createElement('div');
+      kindEl.className = 'who';
+      kindEl.textContent = kindName;
       const inst = document.createElement('div');
       inst.className = 'inst';
       inst.textContent = d.institution || '';
@@ -565,29 +825,77 @@
       const name = document.createElement('div');
       name.className = 'name';
       name.textContent = d.account_name || '';
-      box.append(who, inst, acct, name);
+      box.append(kindEl, inst, acct, name);
       if (d.instructions) {
         const extra = document.createElement('div');
         extra.className = 'extra';
         extra.textContent = d.instructions;
         box.append(extra);
       }
+      // A copy button per destination, named after the destination: "Copy
+      // number" repeated four times is four identical controls to a screen
+      // reader moving by button.
+      const number = String(d.account_number || '');
+      if (number !== '') {
+        const copy = document.createElement('button');
+        copy.className = 'copy';
+        copy.id = 'copy-dest-' + n;
+        copy.type = 'button';
+        copy.textContent = 'Copy number';
+        const label = (d.institution ? d.institution + ' ' : '')
+          + (d.kind === 'momo' ? 'mobile money number' : 'account number');
+        copy.setAttribute('aria-label', 'Copy ' + label);
+        copy.addEventListener('click', function () {
+          copyValue(number, (d.institution || kindName) + ' number copied',
+            'Could not copy. Press and hold the number above to copy it.');
+        });
+        box.append(copy);
+      }
       list.append(box);
+      n++;
     }
 
     // The form resets on every render, for the same reason the part-payment
     // box does: a figure typed against an older balance must not survive.
+    // EMPTY, never prefilled with the balance. A box already holding the right
+    // number is a box a part payment gets reported through by habit, and a
+    // claim that says 3,040 when 1,000 was sent is worse than no claim.
     document.getElementById('claim-cur').textContent =
       (p.display_form === 'code' ? p.currency : p.currency_symbol) || '';
-    document.getElementById('claim-amount').value = money(p).replace(/[^0-9.]/g, '');
+    document.getElementById('claim-amount').value = '';
+    document.getElementById('claim-balance').textContent =
+      'For comparison, the invoice balance is ' + money(p) + '. Enter what you '
+      + 'actually sent, which may be less.';
+    document.getElementById('claim-warn').textContent =
+      'Transfers are not confirmed automatically. Send the money first, then '
+      + 'report it below. The invoice stays outstanding until ' + who
+      + ' matches it to the statement.';
+    document.getElementById('claim-done-text').textContent =
+      'Transfer reported. ' + who + ' still has to match it to the statement '
+      + 'before this invoice shows as paid. Do not send the payment again.';
     document.getElementById('claim-ref').value = '';
     document.getElementById('claim-name').value = '';
     document.getElementById('claim-date').value = '';
     claimMethod(dests.length === 1 ? (dests[0].kind || null) : null);
-    document.getElementById('claim-card').classList.remove('hidden');
+    // The report form starts SHUT. Expanding the transfer route is somebody
+    // asking where to send money, which is not the same question as "how do I
+    // tell them I already did".
+    document.getElementById('claim-card').classList.add('hidden');
+    document.getElementById('claim-toggle').setAttribute('aria-expanded', 'false');
+    document.getElementById('claim-toggle').classList.remove('hidden');
     document.getElementById('claim-done').classList.add('hidden');
+    say('', false);
     hideClaimError();
   }
+
+  document.getElementById('claim-toggle').addEventListener('click', function () {
+    const card = document.getElementById('claim-card');
+    const open = card.classList.contains('hidden');
+    card.classList.toggle('hidden', !open);
+    document.getElementById('claim-toggle')
+      .setAttribute('aria-expanded', String(open));
+    if (open) document.getElementById('claim-amount').focus();
+  });
 
   /// Which of the two the payer says they used. Null until they choose: a
   /// pre-picked method is a wrong answer nobody reads.
@@ -595,10 +903,14 @@
 
   function claimMethod(kind) {
     claimWanted = kind === 'bank' || kind === 'momo' ? kind : null;
-    document.getElementById('claim-bank')
-      .setAttribute('aria-pressed', String(claimWanted === 'bank'));
-    document.getElementById('claim-momo')
-      .setAttribute('aria-pressed', String(claimWanted === 'momo'));
+    for (const k of ['bank', 'momo']) {
+      const on = claimWanted === k;
+      document.getElementById('claim-' + k)
+        .setAttribute('aria-checked', String(on));
+      // The tick, not the fill, is what says which one is chosen. Colour is
+      // never the only signal on this page.
+      document.getElementById('claim-' + k + '-mark').textContent = on ? '✓' : '○';
+    }
   }
 
   function showClaimError(msg) {
@@ -628,6 +940,27 @@
         ? 'Pay ' + money(summary)
         : (minor > 0 ? 'Pay ' + fmtMinor(minor, summary) : 'Pay');
     }
+    partSums();
+  }
+
+  /// Balance, paying now, remaining afterward - the three figures together, so
+  /// nobody has to do the subtraction on a phone. Hidden unless the typed
+  /// amount is one the server could actually accept; a "Remaining afterward"
+  /// of minus four hundred is not a helpful thing to draw.
+  function partSums() {
+    const box = document.getElementById('part-sums');
+    const bal = summary && summary.amount_minor != null
+      ? Number(summary.amount_minor) : null;
+    if (partWanted === null || partWanted <= 0 || bal === null
+        || partWanted > bal) {
+      box.classList.add('hidden');
+      return;
+    }
+    document.getElementById('part-balance').textContent = money(summary);
+    document.getElementById('part-now').textContent = fmtMinor(partWanted, summary);
+    document.getElementById('part-rest').textContent =
+      fmtMinor(bal - partWanted, summary);
+    box.classList.remove('hidden');
   }
 
   /// One place that turns minor units into the farm's own money format, so the
@@ -698,7 +1031,13 @@
       + 'again.'
   };
 
+  /// True while a checkout is being started, so a second tap cannot open a
+  /// second attempt. `disabled` alone is the browser's answer; this is the
+  /// page's, and it is the one a test can see.
+  let paying = false;
+
   async function pay() {
+    if (paying) return;
     clearError();
     const btn = document.getElementById('pay');
     const emailEl = document.getElementById('email');
@@ -706,6 +1045,13 @@
 
     if (summary && summary.email_required && email === '') {
       showError(MESSAGES.email_required);
+      if (emailEl) emailEl.focus();
+      return;
+    }
+    // Caught here so a typo does not cost a round trip. The server validates
+    // the address again, and Paystack after it.
+    if (email !== '' && !/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) {
+      showError(MESSAGES.email_invalid);
       if (emailEl) emailEl.focus();
       return;
     }
@@ -728,14 +1074,13 @@
       }
     }
 
+    paying = true;
     btn.disabled = true;
     const label = btn.textContent;
     btn.textContent = 'Starting';
 
     let res, body;
     try {
-      // THE AMOUNT IS NOT SENT. The server derives it from the invoice as it
-      // stands right now; anything this page claimed would be ignored.
       // THE AMOUNT IS A REQUEST. `begin_provider_payment` validates it against
       // the balance it reads under a row lock and refuses anything above it;
       // this figure is never what decides the charge. Omitted entirely for a
@@ -762,6 +1107,7 @@
       });
       body = await res.json().catch(() => null);
     } catch (_) {
+      paying = false;
       btn.disabled = false;
       btn.textContent = label;
       showError('Could not reach the payment service. Check your connection '
@@ -775,6 +1121,7 @@
       return;
     }
 
+    paying = false;
     btn.disabled = false;
     btn.textContent = label;
     const reason = body && body.error;
@@ -804,7 +1151,16 @@
 
   document.getElementById('part-amount').addEventListener('input', function () {
     clearError();
-    partAmount(readTypedMinor());
+    const typed = readTypedMinor();
+    partAmount(typed);
+    // Said as they type rather than on the button: a figure above the balance
+    // is refused by the server, and finding that out after a tap reads as the
+    // payment having failed.
+    if (typed > 0 && summary && summary.amount_minor != null
+        && typed > summary.amount_minor) {
+      showError('That is more than the ' + money(summary) + ' due. Pay the '
+        + 'full amount, or less.');
+    }
   });
 
   /// What was typed, in minor units, or 0 when it is not yet a usable number.
@@ -834,14 +1190,21 @@
   });
   document.getElementById('claim-send').addEventListener('click', sendClaim);
 
+  /// True while a claim is in flight. Same reason as `paying`: one transfer,
+  /// one message. A second row would land in the farm's queue as a second
+  /// payment to look for.
+  let claiming = false;
+
   /// Files the claim. NOT A PAYMENT: the answer is only ever "we have it", and
   /// the page keeps showing the full amount due, because the invoice has not
   /// moved and must not look as though it has.
   async function sendClaim() {
+    if (claiming) return;
     hideClaimError();
     const minor = readTypedMinor('claim-amount');
     if (minor <= 0) {
-      showClaimError('Enter the amount you sent.');
+      showClaimError('Enter the exact amount you sent.');
+      document.getElementById('claim-amount').focus();
       return;
     }
     if (claimWanted === null) {
@@ -850,11 +1213,14 @@
     }
     const reference = document.getElementById('claim-ref').value.trim();
     if (reference === '') {
-      showClaimError('Enter the reference on your transfer, so the farm can find it.');
+      showClaimError('Enter the reference from your bank receipt or mobile '
+        + 'money message, so the farm can find your payment.');
+      document.getElementById('claim-ref').focus();
       return;
     }
 
     const btn = document.getElementById('claim-send');
+    claiming = true;
     btn.disabled = true;
     btn.textContent = 'Sending';
     try {
@@ -876,18 +1242,28 @@
       });
       const body = await res.json().catch(function () { return null; });
       if (!res.ok || !body || body.ok !== true) {
+        // The form STAYS, with everything still in it. A refusal a payer can
+        // do something about is worth nothing if it costs them the four
+        // fields they just typed.
         showClaimError(claimMessage(body && body.error));
         return;
       }
       // Done. The form goes, the acknowledgement stays, and the amount due
       // above it is untouched - which is the honest picture.
+      //
+      // A REPEAT LANDS HERE TOO. `record_payment_claim` answers a resubmitted
+      // reference with ok+replay and the function drops the flag, so a payer
+      // who taps twice, or reopens the link, sees the same calm awaiting
+      // sentence rather than an error about a duplicate.
       document.getElementById('claim-card').classList.add('hidden');
+      document.getElementById('claim-toggle').classList.add('hidden');
       document.getElementById('claim-done').classList.remove('hidden');
     } catch (_e) {
       showClaimError('Could not reach the farm just now. Try again in a moment.');
     } finally {
+      claiming = false;
       btn.disabled = false;
-      btn.textContent = 'Tell the farm I have paid';
+      btn.textContent = 'Submit transfer for confirmation';
     }
   }
 
@@ -902,7 +1278,8 @@
         return 'That amount does not look right. Enter what you actually sent.';
       case 'reference_invalid':
       case 'reference_required':
-        return 'Enter the reference on your transfer, so the farm can find it.';
+        return 'Enter the reference from your bank receipt or mobile money '
+             + 'message, so the farm can find your payment.';
       case 'method_invalid':
         return 'Choose whether you sent it by bank transfer or mobile money.';
       case 'paid_on_future':
@@ -1000,4 +1377,3 @@
 </script>
 </body>
 </html>
-
