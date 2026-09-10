@@ -1084,7 +1084,15 @@
     const what = minor > 0 && summary ? fmtMinor(minor, summary) : '';
     const invoice = summary && summary.invoice_no ? summary.invoice_no : '';
     if (what === '' || invoice === '') return null;
-    const text = 'I just paid ' + what + ' for invoice ' + invoice
+    // Greeted by name, and the name is whatever the payload carries - which is
+    // the farm's legal name where it has stated one, its own name otherwise.
+    // Never a constant: this page serves every tenant, and the one thing worse
+    // than an unaddressed message is one addressed to somebody else. A payload
+    // with no name at all drops the greeting rather than saying "Hey, the
+    // farm,".
+    const greeting = summary && summary.farm_name
+      ? 'Hey, ' + summary.farm_name + ', ' : '';
+    const text = greeting + 'I just paid ' + what + ' for invoice ' + invoice
       + '. Please confirm.';
     return 'https://wa.me/' + number + '?text=' + encodeURIComponent(text);
   }
