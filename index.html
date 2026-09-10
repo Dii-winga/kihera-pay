@@ -197,6 +197,24 @@
               border-color:var(--dark)}
   .mark{flex:none;font-size:13px;font-weight:700}
 
+  /* THE STEP THEY WERE GOING TO TAKE ANYWAY. In this market a transfer is
+     reported on WhatsApp, form or no form. WhatsApp's own green rather than
+     the farm palette, because the colour says where the tap goes; the word
+     "WhatsApp" says it too, so the colour is never carrying it alone. */
+  .wa{display:flex;align-items:center;justify-content:center;gap:10px;
+      width:100%;min-height:54px;margin-top:14px;padding:12px 16px;
+      border-radius:12px;background:#25D366;color:#04301A;
+      font-weight:700;font-size:16px;text-decoration:none;line-height:1.3;
+      text-align:center;overflow-wrap:anywhere}
+  .wa:focus-visible{outline:3px solid var(--dark);outline-offset:2px}
+  .wa .waicon{flex:none;font-size:18px}
+  .wa-lead{font-size:12.5px;color:var(--muted);margin-top:14px;line-height:1.55}
+
+  #came-back{background:var(--warn-tint);border-color:var(--warn)}
+  #came-back .chip.warn{background:#fff;margin-bottom:10px}
+  #came-back .hint{color:var(--warn-ink);font-size:14px;margin-top:0}
+  #came-back button{min-height:48px;font-size:15px}
+
   .kv{display:flex;justify-content:space-between;gap:12px;margin-top:10px;
       font-size:14px;flex-wrap:wrap}
   .kv .k{color:var(--muted)}
@@ -329,6 +347,18 @@
       </button>
 
       <div class="routebody hidden" id="manual-panel">
+        <!-- THE ONE THING THIS PAGE CANNOT DO IS FOLLOW THEM.
+             Copying an account number is the last thing that happens here
+             before somebody leaves for MTN or their bank, and from where they
+             are standing the payment is then finished. The farm is the one
+             that still needs to hear about it, so the page asks on their
+             return rather than waiting to be visited. -->
+        <div class="card hidden" id="came-back">
+          <span class="chip warn">One more step</span>
+          <p class="hint" id="came-back-text"></p>
+          <button type="button" id="came-back-report">Report the transfer</button>
+        </div>
+
         <p class="compact" id="manual-context"></p>
 
         <div class="card" id="manual-card">
@@ -410,12 +440,26 @@
 
           <div id="claim-error" class="err hidden" role="alert"></div>
 
+          <!-- THE WAY OUT WHEN THE FORM CANNOT BE SENT. If pay-claim is
+               unreachable this page has, without it, left somebody who has
+               genuinely paid with no way to tell anybody. Shown only after a
+               send actually failed, because only then is there an amount to
+               put in the message. -->
+          <a class="wa hidden" id="wa-fallback" target="_blank" rel="noopener noreferrer"
+            ><span class="waicon" aria-hidden="true">&#9993;</span
+            ><span>Tell the farm on WhatsApp instead</span></a>
+
           <button id="claim-send" type="button">Submit transfer for confirmation</button>
         </div>
 
         <div class="card hidden" id="claim-done">
           <span class="chip warn">Awaiting confirmation</span>
           <p class="hint" id="claim-done-text"></p>
+          <p class="wa-lead hidden" id="wa-lead">Want it looked at sooner? Send
+            the farm a message. The text is already written.</p>
+          <a class="wa hidden" id="wa-link" target="_blank" rel="noopener noreferrer"
+            ><span class="waicon" aria-hidden="true">&#9993;</span
+            ><span>Message us on WhatsApp</span></a>
         </div>
       </div>
     </div>
@@ -623,6 +667,34 @@
   // that said "copied" and had not is worse than one with no button, because
   // the payer pastes whatever was in the clipboard before.
 
+  // ---- coming back from the banking app ---------------------------------
+  //
+  // WHAT THIS IS NOT. It is not how the money gets reconciled. The invoice
+  // number written on the transfer is, and a customer who never returns has
+  // still done everything the farm needs: the credit lands on the statement
+  // with INV-000057 against it and a member files it. This only shortens the
+  // wait, and it must never be built on as though the report were the record.
+  //
+  // localStorage, not sessionStorage: the likeliest return is a new tab days
+  // later from the same link on the invoice PDF, and a session store is gone
+  // by then.
+
+  /// True while the post-checkout poll owns the page. The return check below
+  /// stands aside for it: two readers racing would have one of them render a
+  /// state the other had already moved past.
+  let confirming = false;
+
+  const LEFT_KEY = 'kihera-pay-left-' + TOKEN;
+  function rememberLeaving() {
+    try { localStorage.setItem(LEFT_KEY, '1'); } catch (_) {}
+  }
+  function hasLeft() {
+    try { return localStorage.getItem(LEFT_KEY) === '1'; } catch (_) { return false; }
+  }
+  function forgetLeaving() {
+    try { localStorage.removeItem(LEFT_KEY); } catch (_) {}
+  }
+
   function say(msg, bad) {
     const el = document.getElementById('copy-say');
     if (!el) return;
@@ -631,6 +703,10 @@
   }
 
   async function copyValue(value, copied, byHand) {
+    // Whichever value it was, copying one is somebody about to leave this page
+    // for a banking app. Recorded before the clipboard is even tried: they are
+    // no less likely to go and pay because the copy failed and they typed it.
+    rememberLeaving();
     const nav = typeof navigator === 'undefined' ? null : navigator;
     try {
       if (!nav || !nav.clipboard || !nav.clipboard.writeText) throw new Error('no clipboard');
@@ -686,6 +762,9 @@
       // The invoice number is already in the row above; repeating it here read
       // as filler on a page whose job is to be screenshotted.
       document.getElementById('paid-ref').textContent = 'Thank you.';
+      // Nothing left to chase, so nothing left to be asked about on a later
+      // visit to this link.
+      forgetLeaving();
       show('paid');
       return;
     }
@@ -694,6 +773,7 @@
         ? 'Invoice ' + p.invoice_no + ' was cancelled. Contact the farm if you '
           + 'think that is wrong.'
         : 'Contact the farm if you think that is wrong.';
+      forgetLeaving();
       show('cancelled');
       return;
     }
@@ -761,6 +841,7 @@
     else if (online) setRoute('online');
     else setRoute(null);
 
+    askAboutTransfer();
     show('payable');
   }
 
@@ -884,18 +965,85 @@
     document.getElementById('claim-toggle').setAttribute('aria-expanded', 'false');
     document.getElementById('claim-toggle').classList.remove('hidden');
     document.getElementById('claim-done').classList.add('hidden');
+    hideWhatsApp();
     say('', false);
     hideClaimError();
   }
 
-  document.getElementById('claim-toggle').addEventListener('click', function () {
-    const card = document.getElementById('claim-card');
-    const open = card.classList.contains('hidden');
-    card.classList.toggle('hidden', !open);
+  function setReportForm(open) {
+    document.getElementById('claim-card').classList.toggle('hidden', !open);
     document.getElementById('claim-toggle')
       .setAttribute('aria-expanded', String(open));
     if (open) document.getElementById('claim-amount').focus();
+  }
+
+  document.getElementById('claim-toggle').addEventListener('click', function () {
+    setReportForm(document.getElementById('claim-card')
+      .classList.contains('hidden'));
   });
+
+  document.getElementById('came-back-report').addEventListener('click', function () {
+    setRoute('manual');
+    setReportForm(true);
+  });
+
+  /// Ask, if it looks like they went to pay and have not said so.
+  ///
+  /// Every condition here is a reason NOT to ask, and each one matters: a farm
+  /// with no published details has no transfer to report; a filed report has
+  /// been reported; and an invoice that is no longer payable has either been
+  /// settled or withdrawn, in which case a nag about a transfer is the last
+  /// thing anybody needs to read.
+  function askAboutTransfer() {
+    const card = document.getElementById('came-back');
+    const offered = !document.getElementById('manual-wrap')
+      .classList.contains('hidden');
+    const filed = !document.getElementById('claim-done')
+      .classList.contains('hidden');
+    const ask = hasLeft() && offered && !filed
+      && summary && summary.state === 'payable';
+    card.classList.toggle('hidden', !ask);
+    if (!ask) return;
+    document.getElementById('came-back-text').textContent =
+      'Did you send the payment? Tell ' + farmWord() + ' so they can match it '
+      + 'to their statement and close the invoice.';
+    // Opened for them, unless they are part-way through a Paystack checkout,
+    // in which case yanking the page out from under them would be worse than
+    // a prompt they have to tap.
+    if (openRoute !== 'online') setRoute('manual');
+  }
+
+  /// Re-read the invoice when the page comes back into view.
+  ///
+  /// NEVER RE-RENDERS A PAGE SOMEBODY IS TYPING ON. render() resets the report
+  /// form, and the likeliest reason to leave this page mid-form is to go and
+  /// read a reference off a mobile money message. Coming back to an empty box
+  /// would be this page undoing the trip it just sent them on. So it re-renders
+  /// only when the answer actually MOVED - a different state, or a different
+  /// balance - which is the case where a stale screen is the bigger harm.
+  let checking = false;
+  async function recheckOnReturn() {
+    if (checking || confirming) return;
+    checking = true;
+    try {
+      const p = await readState();
+      // Offline, or a failed read. Leave what is on screen: it was true when
+      // it was drawn, and blanking it teaches nobody anything.
+      if (p === null) return;
+      const moved = !summary || p.state !== summary.state
+        || p.amount_minor !== summary.amount_minor;
+      if (moved) render(p); else summary = p;
+      askAboutTransfer();
+    } finally {
+      checking = false;
+    }
+  }
+
+  if (document.addEventListener) {
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') recheckOnReturn();
+    });
+  }
 
   /// Which of the two the payer says they used. Null until they choose: a
   /// pre-picked method is a wrong answer nobody reads.
@@ -911,6 +1059,56 @@
       // never the only signal on this page.
       document.getElementById('claim-' + k + '-mark').textContent = on ? '✓' : '○';
     }
+  }
+
+  // ---- saying it on WhatsApp --------------------------------------------
+  //
+  // The farm publishes a number (0272) expressly so a payer who has just made
+  // a transfer can say so in one tap, in the app they were going to use for it
+  // anyway. The message is written for them; all they do is press send.
+  //
+  // IT IS STILL NOT A PAYMENT, AND NOT EVEN A CLAIM. The claim was filed by
+  // the form above; this is a nudge to go and look at it. Nothing here reaches
+  // `sale_payments`, and the invoice above is untouched either way.
+  //
+  // DIGITS ARE CHECKED HERE TOO. The column has a constraint that permits
+  // nothing else, but this string is interpolated into a URL and a page that
+  // trusts the server to have been right is a page that ships a different link
+  // the day something upstream changes. Anything that is not an international
+  // number of digits draws no button at all.
+  const WA_NUMBER = /^[1-9][0-9]{7,14}$/;
+
+  function whatsappUrl(minor) {
+    const number = summary && summary.whatsapp ? String(summary.whatsapp) : '';
+    if (!WA_NUMBER.test(number)) return null;
+    const what = minor > 0 && summary ? fmtMinor(minor, summary) : '';
+    const invoice = summary && summary.invoice_no ? summary.invoice_no : '';
+    if (what === '' || invoice === '') return null;
+    const text = 'I just paid ' + what + ' for invoice ' + invoice
+      + '. Please confirm.';
+    return 'https://wa.me/' + number + '?text=' + encodeURIComponent(text);
+  }
+
+  /// Fill one of the two WhatsApp links, or leave it hidden. `lead` is the
+  /// sentence above it, which only the acknowledgement has.
+  function showWhatsApp(id, minor, leadId) {
+    const el = document.getElementById(id);
+    const url = whatsappUrl(minor);
+    if (url === null) {
+      el.classList.add('hidden');
+      if (leadId) document.getElementById(leadId).classList.add('hidden');
+      return false;
+    }
+    el.href = url;
+    el.classList.remove('hidden');
+    if (leadId) document.getElementById(leadId).classList.remove('hidden');
+    return true;
+  }
+
+  function hideWhatsApp() {
+    document.getElementById('wa-link').classList.add('hidden');
+    document.getElementById('wa-fallback').classList.add('hidden');
+    document.getElementById('wa-lead').classList.add('hidden');
   }
 
   function showClaimError(msg) {
@@ -1246,6 +1444,11 @@
         // do something about is worth nothing if it costs them the four
         // fields they just typed.
         showClaimError(claimMessage(body && body.error));
+        // A refusal the payer can act on (a bad reference, a duplicate) is not
+        // a dead end; a `too_many_pending` or an `unavailable` can be. Either
+        // way, somebody who has really sent money should not be left with no
+        // way to say so.
+        showWhatsApp('wa-fallback', minor);
         return;
       }
       // Done. The form goes, the acknowledgement stays, and the amount due
@@ -1258,8 +1461,14 @@
       document.getElementById('claim-card').classList.add('hidden');
       document.getElementById('claim-toggle').classList.add('hidden');
       document.getElementById('claim-done').classList.remove('hidden');
+      // Asked and answered. The prompt goes, and does not come back on a later
+      // visit to this link.
+      forgetLeaving();
+      document.getElementById('came-back').classList.add('hidden');
+      showWhatsApp('wa-link', minor, 'wa-lead');
     } catch (_e) {
       showClaimError('Could not reach the farm just now. Try again in a moment.');
+      showWhatsApp('wa-fallback', minor);
     } finally {
       claiming = false;
       btn.disabled = false;
@@ -1337,6 +1546,15 @@
 
   async function confirm() {
     show('confirming');
+    confirming = true;
+    try {
+      await pollUntilAnswered();
+    } finally {
+      confirming = false;
+    }
+  }
+
+  async function pollUntilAnswered() {
     for (let i = 0; i < CONFIRM_TRIES; i++) {
       const p = await readState();
       // Kept even when the answer is "still payable", so the timeout panel
