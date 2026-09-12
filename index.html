@@ -163,6 +163,7 @@
   .dest .who{font-size:11px;letter-spacing:.8px;text-transform:uppercase;
              color:var(--lime-deep);font-weight:600}
   .dest .inst{font-size:15px;font-weight:600;color:var(--dark);margin-top:4px}
+  .dest .branch{font-size:13px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
   /* The number people copy off a phone screen onto a banking app. Tabular so
      the digits line up, and selectable as well as copyable. Rendered exactly
      as the farm published it: no grouping is inserted, because a payer
@@ -906,7 +907,18 @@
       const name = document.createElement('div');
       name.className = 'name';
       name.textContent = d.account_name || '';
-      box.append(kindEl, inst, acct, name);
+      box.append(kindEl, inst);
+      // 0279: the branch, as the invoice prints it. Bank only: mobile money
+      // has no branch, and the server sends none for it, but the page does not
+      // lean on that for something a payer might act on.
+      const branch = d.kind === 'momo' ? '' : String(d.branch || '').trim();
+      if (branch !== '') {
+        const br = document.createElement('div');
+        br.className = 'branch';
+        br.textContent = branch + ' branch';
+        box.append(br);
+      }
+      box.append(acct, name);
       if (d.instructions) {
         const extra = document.createElement('div');
         extra.className = 'extra';
