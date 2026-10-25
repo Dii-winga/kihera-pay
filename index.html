@@ -5,8 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Pay invoice</title>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* POPPINS IS SERVED FROM THIS SITE, NOT FROM GOOGLE FONTS (2026-10-25).
+     The stylesheet link that used to sit above this block was the page's
+     only third-party request, and it gave Google the IP address of everybody
+     who opened a payment link. These are the app's own trimmed files
+     (app/assets/fonts, with their licence), copied into fonts/ so the page
+     needs nothing from anywhere else, and only the weights this page uses.
+     The paths are ABSOLUTE because the page is served at /i/{token}: a relative
+     url() would resolve under it, where _redirects answers with this page. */
+  @font-face{font-family:'Poppins';font-style:normal;font-weight:400;font-display:swap;
+    src:url('/fonts/Poppins-Regular.ttf') format('truetype')}
+  @font-face{font-family:'Poppins';font-style:normal;font-weight:600;font-display:swap;
+    src:url('/fonts/Poppins-SemiBold.ttf') format('truetype')}
+  @font-face{font-family:'Poppins';font-style:normal;font-weight:700;font-display:swap;
+    src:url('/fonts/Poppins-Bold.ttf') format('truetype')}
+
   :root{
     --dark:#012527; --lime:#64C01E; --lime-deep:#3D7A16; --lime-tint:#EEF8E4;
     --ink:#0E1A1A; --muted:#5C6867; --faint:#B2BAB8; --hair:#E4E7E6;

@@ -1,0 +1,36 @@
+# The payment site (pay.kihera-farms.com). Netlify applies these to every file
+# it serves from this directory. The page carries an invoice's payment token in
+# its path and takes money, so it may not be framed, sniffed, indexed or leak
+# its address through a Referer, and it may load only what it uses today:
+#
+#   script-src   the page's one inline script, BY HASH. Edit a single
+#                character of that script and this hash must change with it,
+#                or the browser refuses to run the page at all. CI refuses the
+#                mismatch first (supabase/functions/tests/public_page_headers_test.ts
+#                prints the right value), and the sync workflow deploys only
+#                what CI passed. 'unsafe-inline' sits beside the hash ONLY
+#                for browsers too old to know hashes (CSP level 1, e.g. an
+#                Android 4.4 WebView), which would otherwise refuse the script
+#                outright. Every browser that understands a hash is required
+#                to IGNORE 'unsafe-inline' when one is present, so for them
+#                the hash alone decides.
+#   style-src    the inline <style> block. 'unsafe-inline' because hashing the
+#                stylesheet as well would make every CSS edit a header edit,
+#                for little: a style cannot run code.
+#   font-src     the self-hosted Poppins in fonts/.
+#   connect-src  the Supabase project: payment_link_summary, pay-init and
+#                pay-claim. Nothing else is fetched.
+#   img-src      the same project: pay-logo answers with a redirect to a
+#                signed Storage URL on that origin.
+#
+# Leaving for Paystack is a top-level navigation (location.href), which no CSP
+# directive governs, and so is the WhatsApp link. clipboard-write is not
+# restricted below because copying the account number and the reference is
+# what the page is for.
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-BD3n5BOsewZ5g5EaRUlbkbljTpaDusJQXN6HfuGWMqQ=' 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; connect-src https://eexgyyzsycdscfjkqaxu.supabase.co; img-src https://eexgyyzsycdscfjkqaxu.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  X-Robots-Tag: noindex, nofollow
