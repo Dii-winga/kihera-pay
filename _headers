@@ -17,7 +17,7 @@
 #   style-src    the inline <style> block. 'unsafe-inline' because hashing the
 #                stylesheet as well would make every CSS edit a header edit,
 #                for little: a style cannot run code.
-#   font-src     the self-hosted Poppins in fonts/.
+#   font-src     the self-hosted Lato in fonts/.
 #   connect-src  the Supabase project: payment_link_summary, pay-init and
 #                pay-claim. Nothing else is fetched.
 #   img-src      the same project: pay-logo answers with a redirect to a

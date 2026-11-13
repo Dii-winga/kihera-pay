@@ -1,4 +1,5 @@
-Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
+Copyright (c) 2010-2019, Łukasz Dziedzic (dziedzic@typoland.com),
+with Reserved Font Name Lato.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

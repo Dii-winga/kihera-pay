@@ -6,7 +6,8 @@
 <meta name="robots" content="noindex">
 <title>Pay invoice</title>
 <style>
-  /* POPPINS IS SERVED FROM THIS SITE, NOT FROM GOOGLE FONTS (2026-10-25).
+  /* THE TYPEFACE IS SERVED FROM THIS SITE, NOT FROM GOOGLE FONTS (2026-10-25).
+     Lato since 2026-11-12, the app's typeface; Poppins before it.
      The stylesheet link that used to sit above this block was the page's
      only third-party request, and it gave Google the IP address of everybody
      who opened a payment link. These are the app's own trimmed files
@@ -14,12 +15,12 @@
      needs nothing from anywhere else, and only the weights this page uses.
      The paths are ABSOLUTE because the page is served at /i/{token}: a relative
      url() would resolve under it, where _redirects answers with this page. */
-  @font-face{font-family:'Poppins';font-style:normal;font-weight:400;font-display:swap;
-    src:url('/fonts/Poppins-Regular.ttf') format('truetype')}
-  @font-face{font-family:'Poppins';font-style:normal;font-weight:600;font-display:swap;
-    src:url('/fonts/Poppins-SemiBold.ttf') format('truetype')}
-  @font-face{font-family:'Poppins';font-style:normal;font-weight:700;font-display:swap;
-    src:url('/fonts/Poppins-Bold.ttf') format('truetype')}
+  @font-face{font-family:'Lato';font-style:normal;font-weight:400;font-display:swap;
+    src:url('/fonts/Lato-Regular.ttf') format('truetype')}
+  @font-face{font-family:'Lato';font-style:normal;font-weight:600;font-display:swap;
+    src:url('/fonts/Lato-Semibold.ttf') format('truetype')}
+  @font-face{font-family:'Lato';font-style:normal;font-weight:700;font-display:swap;
+    src:url('/fonts/Lato-Bold.ttf') format('truetype')}
 
   :root{
     --dark:#012527; --lime:#64C01E; --lime-deep:#3D7A16; --lime-tint:#EEF8E4;
@@ -29,7 +30,7 @@
     --bg:#F4F6F5;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Poppins',system-ui,sans-serif;background:var(--bg);color:var(--ink);
+  body{font-family:'Lato',system-ui,sans-serif;background:var(--bg);color:var(--ink);
     -webkit-font-smoothing:antialiased;line-height:1.5;padding:0 16px 48px}
   .wrap{max-width:460px;margin:0 auto}
 
