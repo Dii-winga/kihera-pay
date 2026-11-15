@@ -28,7 +28,7 @@
 # restricted below because copying the account number and the reference is
 # what the page is for.
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'sha256-BD3n5BOsewZ5g5EaRUlbkbljTpaDusJQXN6HfuGWMqQ=' 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; connect-src https://eexgyyzsycdscfjkqaxu.supabase.co; img-src https://eexgyyzsycdscfjkqaxu.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'sha256-qPJmoeEZvDK7H15OKuKdBd37myX+SvTw1PzFzZCd+cM=' 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'; connect-src https://eexgyyzsycdscfjkqaxu.supabase.co; img-src https://eexgyyzsycdscfjkqaxu.supabase.co; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer

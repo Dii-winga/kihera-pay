@@ -212,6 +212,10 @@
   .seg button[aria-checked=true]{background:var(--dark);color:#fff;
               border-color:var(--dark)}
   .mark{flex:none;font-size:13px;font-weight:700}
+  /* 0578: one account a line, the name and number read left to right and
+     wrapping rather than cut, since a bank name can be long. */
+  .seg-stack button{flex:1 1 100%;justify-content:flex-start;text-align:left;
+              overflow-wrap:anywhere}
 
   /* THE STEP THEY WERE GOING TO TAKE ANYWAY. In this market a transfer is
      reported on WhatsApp, form or no form. WhatsApp's own green rather than
@@ -428,6 +432,12 @@
                 ><span class="mark" id="claim-momo-mark" aria-hidden="true"></span
                 ><span>Mobile money</span></button>
             </div>
+          </div>
+
+          <div class="field hidden" id="claim-dest-field">
+            <label id="claim-dest-label">Which account did you send it to?</label>
+            <div class="seg seg-stack" id="claim-dests" role="radiogroup"
+                 aria-labelledby="claim-dest-label"></div>
           </div>
 
           <div class="field">
@@ -954,6 +964,7 @@
           + (d.kind === 'momo' ? 'mobile money number' : 'account number');
         copy.setAttribute('aria-label', 'Copy ' + label);
         copy.addEventListener('click', function () {
+          copiedDest = d.id || null;
           copyValue(number, (d.institution || kindName) + ' number copied',
             'Could not copy. Press and hold the number above to copy it.');
         });
@@ -984,6 +995,8 @@
     document.getElementById('claim-ref').value = '';
     document.getElementById('claim-name').value = '';
     document.getElementById('claim-date').value = '';
+    claimDests = dests;
+    copiedDest = null;
     claimMethod(dests.length === 1 ? (dests[0].kind || null) : null);
     // The report form starts SHUT. Expanding the transfer route is somebody
     // asking where to send money, which is not the same question as "how do I
@@ -1076,6 +1089,19 @@
   /// pre-picked method is a wrong answer nobody reads.
   let claimWanted = null;
 
+  /// 0578: WHICH ACCOUNT. The farm's published accounts, and the one the payer
+  /// says the money went to. Asked only when the farm publishes more than one
+  /// of the chosen kind: with one there is nothing to ask, and the server
+  /// records it anyway. A number the payer copied is taken as the likely
+  /// answer, and still shown, so it can be changed.
+  let claimDests = [];
+  let claimDest = null;
+  let copiedDest = null;
+
+  function destsOfKind(kind) {
+    return claimDests.filter(function (d) { return d.kind === kind && d.id; });
+  }
+
   function claimMethod(kind) {
     claimWanted = kind === 'bank' || kind === 'momo' ? kind : null;
     for (const k of ['bank', 'momo']) {
@@ -1085,6 +1111,51 @@
       // The tick, not the fill, is what says which one is chosen. Colour is
       // never the only signal on this page.
       document.getElementById('claim-' + k + '-mark').textContent = on ? '✓' : '○';
+    }
+    const fits = claimWanted === null ? [] : destsOfKind(claimWanted);
+    claimDest = fits.length === 1 ? fits[0].id : null;
+    if (fits.length > 1) {
+      for (const d of fits) {
+        if (d.id === copiedDest) claimDest = d.id;
+      }
+    }
+    renderClaimDests(fits.length > 1 ? fits : []);
+  }
+
+  function renderClaimDests(fits) {
+    const field = document.getElementById('claim-dest-field');
+    const list = document.getElementById('claim-dests');
+    list.textContent = '';
+    if (fits.length === 0) {
+      field.classList.add('hidden');
+      return;
+    }
+    field.classList.remove('hidden');
+    let i = 0;
+    for (const d of fits) {
+      const on = claimDest === d.id;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.id = 'claim-dest-' + i;
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(on));
+      const mark = document.createElement('span');
+      mark.className = 'mark';
+      mark.setAttribute('aria-hidden', 'true');
+      mark.textContent = on ? '✓' : '○';
+      // textContent, never markup: a farm typed these into a settings form.
+      const label = document.createElement('span');
+      const number = String(d.account_number || '');
+      label.textContent = (d.institution || '')
+        + (number === '' ? '' : ' · ' + number);
+      b.append(mark, label);
+      b.addEventListener('click', function () {
+        hideClaimError();
+        claimDest = d.id;
+        renderClaimDests(fits);
+      });
+      list.append(b);
+      i++;
     }
   }
 
@@ -1444,6 +1515,10 @@
       showClaimError('Choose whether you sent it by bank transfer or mobile money.');
       return;
     }
+    if (claimDest === null && destsOfKind(claimWanted).length > 1) {
+      showClaimError('Choose which account you sent it to.');
+      return;
+    }
     const reference = document.getElementById('claim-ref').value.trim();
     if (reference === '') {
       showClaimError('Enter the reference from your bank receipt or mobile '
@@ -1471,6 +1546,7 @@
           reference: reference,
           payer_name: document.getElementById('claim-name').value.trim(),
           paid_on: document.getElementById('claim-date').value || null,
+          destination_id: claimDest,
         }),
       });
       const body = await res.json().catch(function () { return null; });
@@ -1526,6 +1602,8 @@
              + 'message, so the farm can find your payment.';
       case 'method_invalid':
         return 'Choose whether you sent it by bank transfer or mobile money.';
+      case 'destination_invalid':
+        return 'That account is no longer listed. Choose the account you sent it to.';
       case 'paid_on_future':
         return 'That date is in the future. Put the day you actually sent it.';
       case 'date_invalid':
